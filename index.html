@@ -510,7 +510,126 @@ IMPORTANT REMITTANCE/PAYMENT ADDRESS LOGIC:
           const data = await response.json();
           const text = data.content.map(item => item.type === 'text' ? item.text : '').join('\n');
           const cleaned = text.replace(/```json|```/g, '').trim();
-          const parsed = JSON.parse(cleaned);
+          let parsed = JSON.parse(cleaned);
+
+          // Check if we need to search for address online
+          const needsAddressSearch = 
+            parsed.mailingAddress.data === 'NOT FOUND' || 
+            parsed.mailingAddress.confidence === 'low' ||
+            parsed.mailingAddress.data.toLowerCase().includes('p.o. box') ||
+            parsed.mailingAddress.data.toLowerCase().includes('po box') ||
+            parsed.mailingAddress.data.toLowerCase().includes('p o box');
+
+          const creditorName = parsed.checkPayableTo.data !== 'NOT FOUND' 
+            ? parsed.checkPayableTo.data 
+            : parsed.remittanceTo.data !== 'NOT FOUND'
+              ? parsed.remittanceTo.data
+              : null;
+
+          if (needsAddressSearch && creditorName) {
+            showToast('Searching for verified physical address...', 'info');
+            
+            try {
+              const searchResponse = await fetch('/.netlify/functions/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'claude-sonnet-4-20250514',
+                  max_tokens: 2048,
+                  tools: [{
+                    type: 'web_search_20250305',
+                    name: 'web_search'
+                  }],
+                  messages: [{
+                    role: 'user',
+                    content: `I need to find the OFFICIAL PHYSICAL MAILING ADDRESS for "${creditorName}" (a debt collection agency/creditor).
+
+REQUIREMENTS:
+1. Search for the company's official website and contact information
+2. Find their PHYSICAL street address (for mailing payments)
+3. NEVER return a PO Box - must be a physical street address
+4. Verify the address from multiple sources if possible
+5. Include city, state, and ZIP code
+
+Search for: "${creditorName}" official address payment mailing address
+
+After searching, respond with ONLY a JSON object (no markdown, no preamble):
+{
+  "companyName": "verified company name",
+  "physicalAddress": "full street address with city, state, zip",
+  "source": "where you found this (website URL or source name)",
+  "isVerified": true or false,
+  "isPOBox": true or false,
+  "confidence": "high|medium|low",
+  "notes": "any important notes about the address"
+}
+
+If you cannot find a verified physical address, set isVerified to false.`
+                  }]
+                })
+              });
+
+              if (searchResponse.ok) {
+                const searchData = await searchResponse.json();
+                const searchText = searchData.content
+                  .map(item => item.type === 'text' ? item.text : '')
+                  .join('\n');
+                const searchCleaned = searchText.replace(/```json|```/g, '').trim();
+                
+                try {
+                  const addressResult = JSON.parse(searchCleaned);
+                  
+                  if (addressResult.isVerified && !addressResult.isPOBox && addressResult.physicalAddress) {
+                    // Update the parsed data with the verified address
+                    parsed.mailingAddress = {
+                      data: addressResult.physicalAddress,
+                      confidence: addressResult.confidence || 'medium',
+                      source: `Web search verified: ${addressResult.source}`,
+                      notes: `🌐 Address found via web search. ${addressResult.notes || ''} Original document had no valid physical address.`,
+                      location: 'Found via internet search (not in original document)',
+                      webVerified: true
+                    };
+
+                    // Also update remittanceTo if it was NOT FOUND
+                    if (parsed.remittanceTo.data === 'NOT FOUND') {
+                      parsed.remittanceTo = {
+                        data: addressResult.companyName || creditorName,
+                        confidence: 'medium',
+                        source: `Web search verified: ${addressResult.source}`,
+                        notes: '🌐 Company name verified via web search',
+                        location: 'Found via internet search',
+                        webVerified: true
+                      };
+                    }
+
+                    showToast('✓ Physical address verified online!', 'success');
+                  } else if (addressResult.isPOBox) {
+                    // Found address but it's a PO Box - note this
+                    parsed.mailingAddress.notes = (parsed.mailingAddress.notes || '') + 
+                      ' ⚠️ Web search only found PO Box address. Please verify physical address manually.';
+                    showToast('⚠️ Only PO Box found - manual verification needed', 'error');
+                  } else {
+                    showToast('Could not verify address online', 'error');
+                  }
+                } catch (parseErr) {
+                  console.error('Failed to parse address search result:', parseErr);
+                }
+              }
+            } catch (searchErr) {
+              console.error('Address search failed:', searchErr);
+              showToast('Address search failed - please verify manually', 'error');
+            }
+          }
+
+          // Check if address is a PO Box and warn user
+          if (parsed.mailingAddress.data !== 'NOT FOUND') {
+            const addressLower = parsed.mailingAddress.data.toLowerCase();
+            if (addressLower.includes('p.o. box') || addressLower.includes('po box') || addressLower.includes('p o box')) {
+              parsed.mailingAddress.notes = (parsed.mailingAddress.notes || '') + 
+                ' ⚠️ WARNING: This is a PO Box address. Physical address recommended for certified mail.';
+              parsed.mailingAddress.confidence = 'low';
+            }
+          }
 
           setExtractedData(parsed);
           
@@ -1174,9 +1293,16 @@ IMPORTANT REMITTANCE/PAYMENT ADDRESS LOGIC:
                         >
                           {/* Field Header */}
                           <div className="flex items-start justify-between mb-3">
-                            <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {fieldLabels[key]}
-                            </h3>
+                            <div className="flex items-center space-x-2">
+                              <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {fieldLabels[key]}
+                              </h3>
+                              {value.webVerified && (
+                                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium dark:bg-blue-900 dark:text-blue-200">
+                                  🌐 Web Verified
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center space-x-2">
                               {value.location && (
                                 <button
