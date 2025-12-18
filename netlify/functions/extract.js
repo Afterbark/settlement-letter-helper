@@ -24,6 +24,10 @@ exports.handler = async function(event, context) {
   if (!API_KEY) {
     return {
       statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       body: JSON.stringify({ error: "API Key is not configured in Netlify." })
     };
   }
@@ -56,6 +60,10 @@ exports.handler = async function(event, context) {
   } catch (error) {
     return {
       statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       body: JSON.stringify({ error: error.message })
     };
   }
