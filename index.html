@@ -8,6 +8,14 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {}
+      }
+    }
+  </script>
   <style>
     .animate-spin {
       animation: spin 1s linear infinite;
@@ -16,14 +24,155 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+    .toast-enter {
+      animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(-100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .drag-active {
+      border-color: #3b82f6 !important;
+      background-color: #eff6ff !important;
+    }
+    .dark .drag-active {
+      background-color: #1e3a5f !important;
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
   
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect, useCallback } = React;
 
+    // ==================== ENCRYPTION UTILITIES ====================
+    const CryptoUtils = {
+      async generateKey() {
+        return await window.crypto.subtle.generateKey(
+          { name: 'AES-GCM', length: 256 },
+          true,
+          ['encrypt', 'decrypt']
+        );
+      },
+
+      async getStoredKey() {
+        const storedKey = localStorage.getItem('encryptionKey');
+        if (storedKey) {
+          const keyData = JSON.parse(storedKey);
+          return await window.crypto.subtle.importKey(
+            'jwk',
+            keyData,
+            { name: 'AES-GCM', length: 256 },
+            true,
+            ['encrypt', 'decrypt']
+          );
+        } else {
+          const newKey = await this.generateKey();
+          const exportedKey = await window.crypto.subtle.exportKey('jwk', newKey);
+          localStorage.setItem('encryptionKey', JSON.stringify(exportedKey));
+          return newKey;
+        }
+      },
+
+      async encrypt(data) {
+        try {
+          const key = await this.getStoredKey();
+          const encoder = new TextEncoder();
+          const dataBuffer = encoder.encode(JSON.stringify(data));
+          const iv = window.crypto.getRandomValues(new Uint8Array(12));
+          
+          const encryptedBuffer = await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv },
+            key,
+            dataBuffer
+          );
+
+          const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+          combined.set(iv);
+          combined.set(new Uint8Array(encryptedBuffer), iv.length);
+
+          return btoa(String.fromCharCode(...combined));
+        } catch (error) {
+          console.error('Encryption error:', error);
+          return null;
+        }
+      },
+
+      async decrypt(encryptedData) {
+        try {
+          const key = await this.getStoredKey();
+          
+          const combined = new Uint8Array(
+            atob(encryptedData).split('').map(c => c.charCodeAt(0))
+          );
+
+          const iv = combined.slice(0, 12);
+          const data = combined.slice(12);
+
+          const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            key,
+            data
+          );
+
+          const decoder = new TextDecoder();
+          return JSON.parse(decoder.decode(decryptedBuffer));
+        } catch (error) {
+          console.error('Decryption error:', error);
+          return null;
+        }
+      }
+    };
+
+    // ==================== TOAST NOTIFICATION COMPONENT ====================
+    function Toast({ message, type, onClose }) {
+      useEffect(() => {
+        const timer = setTimeout(onClose, 2500);
+        return () => clearTimeout(timer);
+      }, [onClose]);
+
+      const bgColor = type === 'success' ? 'bg-green-500' : 
+                      type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+
+      return (
+        <div className={`fixed top-4 right-4 z-50 toast-enter ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2`}>
+          <span>{type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+          <span>{message}</span>
+        </div>
+      );
+    }
+
+    // ==================== CONFIRMATION MODAL COMPONENT ====================
+    function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, isDark }) {
+      if (!isOpen) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-50" onClick={onCancel}></div>
+          <div className={`relative z-10 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+            <h3 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
+            <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{message}</p>
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={onCancel}
+                className={`px-4 py-2 rounded-lg font-medium ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
+              >
+                Yes, Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== MAIN APP COMPONENT ====================
     function SettlementExtractorPro() {
       const [file, setFile] = useState(null);
       const [filePreview, setFilePreview] = useState(null);
@@ -38,11 +187,117 @@
       const [compareItems, setCompareItems] = useState([]);
       const [validationErrors, setValidationErrors] = useState([]);
       const [currentRecordId, setCurrentRecordId] = useState(null);
+      
+      // Enhanced features state
+      const [darkMode, setDarkMode] = useState(() => {
+        return localStorage.getItem('darkMode') === 'true';
+      });
+      const [toast, setToast] = useState(null);
+      const [isDragging, setIsDragging] = useState(false);
+      const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null });
+      const [highlightedField, setHighlightedField] = useState(null);
 
-      const handleFileUpload = async (e) => {
-        const uploadedFile = e.target.files[0];
-        if (!uploadedFile) return;
+      // Field labels
+      const fieldLabels = {
+        paymentBreakdown: 'Payment Breakdown',
+        firstPaymentDate: 'First Payment Date',
+        remittanceTo: 'Remit Payment To',
+        mailingAddress: 'Mailing Address',
+        checkPayableTo: 'Make Check Payable To',
+        clientName: 'Client Name',
+        referenceNumber: 'Reference/Account Number',
+        additionalInstructions: 'Additional Instructions'
+      };
 
+      // Apply dark mode
+      useEffect(() => {
+        if (darkMode) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('darkMode', darkMode);
+      }, [darkMode]);
+
+      // Load encrypted records on mount
+      useEffect(() => {
+        const loadRecords = async () => {
+          const encrypted = localStorage.getItem('encryptedRecords');
+          if (encrypted) {
+            const decrypted = await CryptoUtils.decrypt(encrypted);
+            if (decrypted) {
+              setSavedRecords(decrypted);
+            }
+          }
+        };
+        loadRecords();
+      }, []);
+
+      // Save encrypted records when changed
+      useEffect(() => {
+        const saveRecords = async () => {
+          if (savedRecords.length > 0) {
+            const encrypted = await CryptoUtils.encrypt(savedRecords);
+            if (encrypted) {
+              localStorage.setItem('encryptedRecords', encrypted);
+            }
+          } else {
+            localStorage.removeItem('encryptedRecords');
+          }
+        };
+        saveRecords();
+      }, [savedRecords]);
+
+      // Show toast notification
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+      };
+
+      // Copy to clipboard with toast notification
+      const copyToClipboard = async (text, fieldName = 'Data') => {
+        try {
+          await navigator.clipboard.writeText(text);
+          showToast(`${fieldName} copied to clipboard!`, 'success');
+        } catch (err) {
+          showToast('Failed to copy', 'error');
+        }
+      };
+
+      // Drag and drop handlers
+      const handleDragEnter = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+      }, []);
+
+      const handleDragLeave = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+      }, []);
+
+      const handleDragOver = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, []);
+
+      const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          const droppedFile = files[0];
+          if (droppedFile.type === 'application/pdf' || droppedFile.type.startsWith('image/')) {
+            handleFileProcess(droppedFile);
+          } else {
+            showToast('Please upload a PDF or image file', 'error');
+          }
+        }
+      }, []);
+
+      const handleFileProcess = (uploadedFile) => {
         setFile(uploadedFile);
         setError(null);
         setExtractedData(null);
@@ -50,10 +305,19 @@
         setUserNotes({});
         setValidationErrors([]);
         setCurrentRecordId(null);
+        setHighlightedField(null);
 
         const reader = new FileReader();
         reader.onload = (e) => setFilePreview(e.target.result);
         reader.readAsDataURL(uploadedFile);
+        
+        showToast(`File "${uploadedFile.name}" loaded!`, 'success');
+      };
+
+      const handleFileUpload = async (e) => {
+        const uploadedFile = e.target.files[0];
+        if (!uploadedFile) return;
+        handleFileProcess(uploadedFile);
       };
 
       const validateExtractedData = (data) => {
@@ -160,49 +424,57 @@ Extract and return ONLY a JSON object with this exact structure (no markdown, no
     "data": "extracted text with all amounts and dates",
     "confidence": "high|medium|low",
     "source": "exact quote from document",
-    "notes": "any concerns or clarifications"
+    "notes": "any concerns or clarifications",
+    "location": "describe where in the document this was found (e.g., 'top of page', 'paragraph 2', 'under Payment Terms header')"
   },
   "firstPaymentDate": {
     "data": "date of first payment",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "remittanceTo": {
     "data": "who to remit payment to",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "mailingAddress": {
     "data": "complete mailing address",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "checkPayableTo": {
     "data": "make check payable to name",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "clientName": {
     "data": "client name",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "referenceNumber": {
     "data": "account/reference number for check memo",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   },
   "additionalInstructions": {
     "data": "any special payment instructions or conditions",
     "confidence": "high|medium|low",
     "source": "exact quote",
-    "notes": ""
+    "notes": "",
+    "location": "where in document"
   }
 }
 
@@ -212,6 +484,7 @@ CRITICAL RULES:
 - Use "high" confidence only when information is explicit and unambiguous
 - In "source", include the EXACT text from the document
 - In "notes", flag ANY concerns: unclear amounts, missing details, ambiguous dates, etc.
+- In "location", describe where in the document this information appears
 - For payment breakdown, include ALL amounts, dates, and payment schedule details
 - For firstPaymentDate, extract the specific date when the first payment is due
 - Be extremely conservative - when in doubt, mark as medium or low confidence`
@@ -241,16 +514,19 @@ CRITICAL RULES:
 
           const errors = validateExtractedData(parsed);
           setValidationErrors(errors);
+          
+          showToast('Document processed successfully!', 'success');
 
         } catch (err) {
           console.error('Extraction error:', err);
           setError(`Failed to process document: ${err.message}. Please ensure the API is configured correctly.`);
+          showToast('Failed to process document', 'error');
         } finally {
           setLoading(false);
         }
       };
 
-      const saveRecord = () => {
+      const saveRecord = async () => {
         if (!extractedData) return;
 
         const recordId = currentRecordId || `record_${Date.now()}`;
@@ -270,7 +546,7 @@ CRITICAL RULES:
         
         setSavedRecords(updatedRecords);
         setCurrentRecordId(recordId);
-        alert('Record saved successfully!');
+        showToast('Record saved and encrypted!', 'success');
       };
 
       const loadRecord = (recordId) => {
@@ -278,32 +554,61 @@ CRITICAL RULES:
         if (record) {
           setExtractedData(record.extractedData);
           setVerifications(record.verifications);
-          setUserNotes(record.userNotes);
-          setValidationErrors(record.validationErrors);
+          setUserNotes(record.userNotes || {});
+          setValidationErrors(record.validationErrors || []);
           setFilePreview(record.filePreview);
-          setFile({ name: record.fileName });
+          setFile({ name: record.fileName, type: record.filePreview?.includes('application/pdf') ? 'application/pdf' : 'image/jpeg' });
           setCurrentRecordId(recordId);
           setCurrentView('upload');
+          showToast('Record loaded!', 'success');
         }
       };
 
       const deleteRecord = (recordId) => {
-        if (confirm('Are you sure you want to delete this record?')) {
-          const updatedRecords = savedRecords.filter(r => r.id !== recordId);
-          setSavedRecords(updatedRecords);
-        }
+        setConfirmModal({
+          isOpen: true,
+          title: 'Delete Record?',
+          message: 'Are you sure you want to delete this record? This action cannot be undone.',
+          action: () => {
+            const updatedRecords = savedRecords.filter(r => r.id !== recordId);
+            setSavedRecords(updatedRecords);
+            showToast('Record deleted', 'success');
+            setConfirmModal({ isOpen: false, action: null });
+          }
+        });
+      };
+
+      const clearAllData = () => {
+        setConfirmModal({
+          isOpen: true,
+          title: 'Clear All Data?',
+          message: 'Are you sure you want to clear all current data? Any unsaved changes will be lost.',
+          action: () => {
+            setExtractedData(null);
+            setFile(null);
+            setFilePreview(null);
+            setVerifications({});
+            setUserNotes({});
+            setValidationErrors([]);
+            setCurrentRecordId(null);
+            setHighlightedField(null);
+            showToast('All data cleared', 'success');
+            setConfirmModal({ isOpen: false, action: null });
+          }
+        });
       };
 
       const exportToCSV = () => {
         if (!extractedData) return;
 
-        const headers = ['Field', 'Value', 'Confidence', 'Source', 'Notes', 'User Notes', 'Verified'];
+        const headers = ['Field', 'Value', 'Confidence', 'Source', 'Location', 'Notes', 'User Notes', 'Verified'];
         const rows = Object.entries(extractedData).map(([key, value]) => [
           fieldLabels[key],
           value.data,
           value.confidence,
           value.source,
-          value.notes,
+          value.location || '',
+          value.notes || '',
           userNotes[key] || '',
           verifications[key] ? 'Yes' : 'No'
         ]);
@@ -318,14 +623,16 @@ CRITICAL RULES:
         a.href = url;
         a.download = `settlement-${file?.name || 'export'}-${Date.now()}.csv`;
         a.click();
+        
+        showToast('CSV exported!', 'success');
       };
 
       const copyAllData = () => {
+        if (!extractedData) return;
         const text = Object.entries(extractedData).map(([key, value]) => 
           `${fieldLabels[key]}: ${value.data}`
         ).join('\n\n');
-        navigator.clipboard.writeText(text);
-        alert('All data copied to clipboard!');
+        copyToClipboard(text, 'All data');
       };
 
       const toggleVerification = (field) => {
@@ -342,10 +649,6 @@ CRITICAL RULES:
         }));
       };
 
-      const copyToClipboard = (text) => {
-        navigator.clipboard.writeText(text);
-      };
-
       const addToCompare = () => {
         if (extractedData && compareItems.length < 3) {
           setCompareItems([...compareItems, {
@@ -353,13 +656,20 @@ CRITICAL RULES:
             fileName: file.name,
             data: extractedData
           }]);
+          showToast('Added to comparison!', 'success');
         }
       };
 
       const removeFromCompare = (id) => {
         setCompareItems(compareItems.filter(item => item.id !== id));
+        showToast('Removed from comparison', 'success');
       };
 
+      const highlightFieldInDocument = (fieldKey) => {
+        setHighlightedField(highlightedField === fieldKey ? null : fieldKey);
+      };
+
+      // Computed values
       const allVerified = extractedData && Object.keys(verifications).every(key => verifications[key]);
       const hasLowConfidence = extractedData && Object.values(extractedData).some(item => item.confidence === 'low');
       const hasMediumConfidence = extractedData && Object.values(extractedData).some(item => item.confidence === 'medium');
@@ -368,22 +678,11 @@ CRITICAL RULES:
 
       const getConfidenceBadge = (confidence) => {
         const colors = {
-          high: 'bg-green-100 text-green-800 border-green-300',
-          medium: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-          low: 'bg-red-100 text-red-800 border-red-300'
+          high: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700',
+          medium: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700',
+          low: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200 dark:border-red-700'
         };
         return colors[confidence] || colors.low;
-      };
-
-      const fieldLabels = {
-        paymentBreakdown: 'Payment Breakdown',
-        firstPaymentDate: 'First Payment Date',
-        remittanceTo: 'Remit Payment To',
-        mailingAddress: 'Mailing Address',
-        checkPayableTo: 'Make Check Payable To',
-        clientName: 'Client Name',
-        referenceNumber: 'Reference/Account Number',
-        additionalInstructions: 'Additional Instructions'
       };
 
       const filteredRecords = savedRecords.filter(record => {
@@ -393,29 +692,86 @@ CRITICAL RULES:
                record.extractedData.checkPayableTo.data.toLowerCase().includes(searchLower);
       });
 
+      // ==================== RENDER ====================
       return (
-        <div className="min-h-screen bg-gray-50">
-          {/* Navigation */}
-          <div className="bg-white border-b shadow-sm">
+        <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+          {/* Toast Notification */}
+          {toast && (
+            <Toast 
+              message={toast.message} 
+              type={toast.type} 
+              onClose={() => setToast(null)} 
+            />
+          )}
+
+          {/* Confirmation Modal */}
+          <ConfirmModal
+            isOpen={confirmModal.isOpen}
+            title={confirmModal.title}
+            message={confirmModal.message}
+            onConfirm={confirmModal.action}
+            onCancel={() => setConfirmModal({ isOpen: false, action: null })}
+            isDark={darkMode}
+          />
+
+          {/* Navigation Header */}
+          <div className={`border-b shadow-sm transition-colors duration-300 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
             <div className="max-w-7xl mx-auto px-6 py-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
-                <h1 className="text-2xl font-bold text-gray-900">Settlement Payment Extractor Pro</h1>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-3">
+                  <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Settlement Payment Extractor Pro
+                  </h1>
+                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium dark:bg-green-900 dark:text-green-200">
+                    🔒 Encrypted
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {/* Dark Mode Toggle */}
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className={`p-2 rounded-lg font-medium transition-colors ${
+                      darkMode 
+                        ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' 
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                    title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                  >
+                    {darkMode ? '☀️' : '🌙'}
+                  </button>
                   <button
                     onClick={() => setCurrentView('upload')}
-                    className={`px-4 py-2 rounded-lg font-medium ${currentView === 'upload' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      currentView === 'upload' 
+                        ? 'bg-blue-600 text-white' 
+                        : darkMode 
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
                   >
                     New Upload
                   </button>
                   <button
                     onClick={() => setCurrentView('history')}
-                    className={`px-4 py-2 rounded-lg font-medium ${currentView === 'history' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      currentView === 'history' 
+                        ? 'bg-blue-600 text-white' 
+                        : darkMode 
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
                   >
                     History ({savedRecords.length})
                   </button>
                   <button
                     onClick={() => setCurrentView('compare')}
-                    className={`px-4 py-2 rounded-lg font-medium ${currentView === 'compare' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      currentView === 'compare' 
+                        ? 'bg-blue-600 text-white' 
+                        : darkMode 
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
                   >
                     Compare ({compareItems.length})
                   </button>
@@ -425,61 +781,81 @@ CRITICAL RULES:
           </div>
 
           <div className="max-w-7xl mx-auto p-6">
-            {/* History View */}
+            {/* ==================== HISTORY VIEW ==================== */}
             {currentView === 'history' && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className={`rounded-lg shadow-sm p-6 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-                  <h2 className="text-xl font-bold text-gray-900">Saved Records</h2>
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Saved Records</h2>
                   <input
                     type="text"
                     placeholder="Search by client, creditor, or file..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="px-4 py-2 border rounded-lg w-80"
+                    className={`px-4 py-2 border rounded-lg w-80 transition-colors ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300'
+                    }`}
                   />
                 </div>
 
                 {filteredRecords.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className="text-4xl mb-4">📁</p>
                     <p>No saved records found</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {filteredRecords.map(record => (
-                      <div key={record.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div 
+                        key={record.id} 
+                        className={`border rounded-lg p-4 transition-colors ${
+                          darkMode 
+                            ? 'border-gray-700 hover:bg-gray-700' 
+                            : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
                         <div className="flex items-start justify-between flex-wrap gap-4">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2 flex-wrap">
-                              <span className="font-medium text-gray-900">{record.fileName}</span>
-                              <span className="text-sm text-gray-500">
+                            <div className="flex items-center space-x-3 mb-2 flex-wrap gap-2">
+                              <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {record.fileName}
+                              </span>
+                              <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                                 {new Date(record.timestamp).toLocaleDateString()} {new Date(record.timestamp).toLocaleTimeString()}
                               </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div>
-                                <span className="text-gray-600">Client:</span>
-                                <span className="ml-2 font-medium">{record.extractedData.clientName.data}</span>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Client:</span>
+                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.clientName.data}
+                                </span>
                               </div>
                               <div>
-                                <span className="text-gray-600">Creditor:</span>
-                                <span className="ml-2 font-medium">{record.extractedData.checkPayableTo.data}</span>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Creditor:</span>
+                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.checkPayableTo.data}
+                                </span>
                               </div>
                               <div>
-                                <span className="text-gray-600">First Payment:</span>
-                                <span className="ml-2 font-medium">{record.extractedData.firstPaymentDate.data}</span>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>First Payment:</span>
+                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.firstPaymentDate.data}
+                                </span>
                               </div>
                             </div>
                           </div>
                           <div className="flex space-x-2">
                             <button
                               onClick={() => loadRecord(record.id)}
-                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
                             >
                               Load
                             </button>
                             <button
                               onClick={() => deleteRecord(record.id)}
-                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium"
                             >
                               Delete
                             </button>
@@ -492,24 +868,32 @@ CRITICAL RULES:
               </div>
             )}
 
-            {/* Compare View */}
+            {/* ==================== COMPARE VIEW ==================== */}
             {currentView === 'compare' && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">Compare Settlement Offers</h2>
+              <div className={`rounded-lg shadow-sm p-6 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Compare Settlement Offers
+                </h2>
                 
                 {compareItems.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className="text-4xl mb-4">⚖️</p>
                     <p>No items to compare. Process documents and add them to comparison.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {compareItems.map(item => (
-                      <div key={item.id} className="border rounded-lg p-4">
+                      <div 
+                        key={item.id} 
+                        className={`border rounded-lg p-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                      >
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-bold text-gray-900 truncate">{item.fileName}</h3>
+                          <h3 className={`font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {item.fileName}
+                          </h3>
                           <button
                             onClick={() => removeFromCompare(item.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 font-bold"
                           >
                             ✕
                           </button>
@@ -517,8 +901,12 @@ CRITICAL RULES:
                         <div className="space-y-3 text-sm">
                           {Object.entries(item.data).map(([key, value]) => (
                             <div key={key}>
-                              <span className="text-gray-600 block text-xs">{fieldLabels[key]}</span>
-                              <span className="font-medium text-gray-900">{value.data}</span>
+                              <span className={`block text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                {fieldLabels[key]}
+                              </span>
+                              <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                {value.data}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -529,16 +917,28 @@ CRITICAL RULES:
               </div>
             )}
 
-            {/* Upload/Process View */}
+            {/* ==================== UPLOAD VIEW ==================== */}
             {currentView === 'upload' && !extractedData && (
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-400 transition-colors">
-                  <div className="text-4xl mb-4">📄</div>
+              <div className={`rounded-lg shadow-sm p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300 ${
+                    isDragging 
+                      ? 'drag-active border-blue-500' 
+                      : darkMode 
+                        ? 'border-gray-600 hover:border-blue-400' 
+                        : 'border-gray-300 hover:border-blue-400'
+                  }`}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                >
+                  <div className="text-5xl mb-4">{isDragging ? '📥' : '📄'}</div>
                   <label className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
+                    <span className="text-blue-600 hover:text-blue-700 font-medium text-lg">
                       Click to upload
                     </span>
-                    <span className="text-gray-600"> or drag and drop</span>
+                    <span className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}> or drag and drop</span>
                     <input
                       type="file"
                       className="hidden"
@@ -546,18 +946,27 @@ CRITICAL RULES:
                       onChange={handleFileUpload}
                     />
                   </label>
-                  <p className="text-sm text-gray-500 mt-2">PDF, JPG, or PNG (max 10MB)</p>
+                  <p className={`text-sm mt-4 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    PDF, JPG, or PNG (max 10MB)
+                  </p>
+                  {isDragging && (
+                    <p className="text-blue-500 font-medium mt-4 text-lg">Drop your file here!</p>
+                  )}
                 </div>
 
                 {file && !loading && !extractedData && (
                   <div className="mt-6">
-                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200 flex-wrap gap-4">
-                      <span className="text-sm font-medium text-gray-900">{file.name}</span>
+                    <div className={`flex items-center justify-between p-4 rounded-lg border flex-wrap gap-4 ${
+                      darkMode ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <span className={`text-sm font-medium ${darkMode ? 'text-blue-200' : 'text-gray-900'}`}>
+                        📎 {file.name}
+                      </span>
                       <button
                         onClick={processDocument}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                       >
-                        Process Document
+                        🚀 Process Document
                       </button>
                     </div>
                   </div>
@@ -565,24 +974,36 @@ CRITICAL RULES:
 
                 {loading && (
                   <div className="mt-6 text-center">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <p className="mt-2 text-gray-600">Analyzing document...</p>
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <p className={`mt-4 text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Analyzing document with AI...
+                    </p>
+                    <p className={`mt-1 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                      This may take a few seconds
+                    </p>
                   </div>
                 )}
 
                 {error && (
-                  <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <span className="text-red-800">{error}</span>
+                  <div className={`mt-6 p-4 rounded-lg border ${
+                    darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'
+                  }`}>
+                    <p className={`font-medium ${darkMode ? 'text-red-200' : 'text-red-800'}`}>
+                      ❌ Error
+                    </p>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-700'}>{error}</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Results View */}
+            {/* ==================== RESULTS VIEW ==================== */}
             {currentView === 'upload' && extractedData && (
               <div className="space-y-6">
                 {/* Action Buttons */}
-                <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between flex-wrap gap-2">
+                <div className={`rounded-lg shadow-sm p-4 flex items-center justify-between flex-wrap gap-2 ${
+                  darkMode ? 'bg-gray-800' : 'bg-white'
+                }`}>
                   <div className="flex space-x-2 flex-wrap gap-2">
                     <button
                       onClick={saveRecord}
@@ -598,7 +1019,11 @@ CRITICAL RULES:
                     </button>
                     <button
                       onClick={copyAllData}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
+                      className={`px-4 py-2 rounded-lg font-medium ${
+                        darkMode 
+                          ? 'bg-gray-700 text-white hover:bg-gray-600' 
+                          : 'bg-gray-600 text-white hover:bg-gray-700'
+                      }`}
                     >
                       📋 Copy All
                     </button>
@@ -612,18 +1037,14 @@ CRITICAL RULES:
                     )}
                   </div>
                   <button
-                    onClick={() => {
-                      setExtractedData(null);
-                      setFile(null);
-                      setFilePreview(null);
-                      setVerifications({});
-                      setUserNotes({});
-                      setValidationErrors([]);
-                      setCurrentRecordId(null);
-                    }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
+                    onClick={clearAllData}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                      darkMode 
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
                   >
-                    New Document
+                    🔄 New Document
                   </button>
                 </div>
 
@@ -631,15 +1052,29 @@ CRITICAL RULES:
                 {validationErrors.length > 0 && (
                   <div className="space-y-2">
                     {criticalErrors.map((err, idx) => (
-                      <div key={idx} className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-                        <h3 className="font-bold text-red-900">⚠️ {err.field}</h3>
-                        <p className="text-red-800">{err.message}</p>
+                      <div 
+                        key={idx} 
+                        className={`border-2 rounded-lg p-4 ${
+                          darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'
+                        }`}
+                      >
+                        <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>
+                          🚨 {err.field}
+                        </h3>
+                        <p className={darkMode ? 'text-red-300' : 'text-red-800'}>{err.message}</p>
                       </div>
                     ))}
                     {highErrors.map((err, idx) => (
-                      <div key={idx} className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
-                        <h3 className="font-bold text-yellow-900">⚠️ {err.field}</h3>
-                        <p className="text-yellow-800">{err.message}</p>
+                      <div 
+                        key={idx} 
+                        className={`border-2 rounded-lg p-4 ${
+                          darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'
+                        }`}
+                      >
+                        <h3 className={`font-bold ${darkMode ? 'text-yellow-200' : 'text-yellow-900'}`}>
+                          ⚠️ {err.field}
+                        </h3>
+                        <p className={darkMode ? 'text-yellow-300' : 'text-yellow-800'}>{err.message}</p>
                       </div>
                     ))}
                   </div>
@@ -647,80 +1082,187 @@ CRITICAL RULES:
 
                 {/* Warning Banners */}
                 {hasLowConfidence && (
-                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-                    <h3 className="font-bold text-red-900 mb-1">🚨 CRITICAL: Low Confidence Data Detected</h3>
-                    <p className="text-red-800">Some fields have LOW confidence. Review carefully before use - errors cost money!</p>
+                  <div className={`border-2 rounded-lg p-4 ${
+                    darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'
+                  }`}>
+                    <h3 className={`font-bold mb-1 ${darkMode ? 'text-red-200' : 'text-red-900'}`}>
+                      🚨 CRITICAL: Low Confidence Data Detected
+                    </h3>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-800'}>
+                      Some fields have LOW confidence. Review carefully before use - errors cost money!
+                    </p>
                   </div>
                 )}
 
-                {hasMediumConfidence && (
-                  <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
-                    <h3 className="font-bold text-yellow-900 mb-1">⚠️ WARNING: Medium Confidence Data</h3>
-                    <p className="text-yellow-800">Some fields need extra verification. Double-check against the original document.</p>
+                {hasMediumConfidence && !hasLowConfidence && (
+                  <div className={`border-2 rounded-lg p-4 ${
+                    darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'
+                  }`}>
+                    <h3 className={`font-bold mb-1 ${darkMode ? 'text-yellow-200' : 'text-yellow-900'}`}>
+                      ⚠️ WARNING: Medium Confidence Data
+                    </h3>
+                    <p className={darkMode ? 'text-yellow-300' : 'text-yellow-800'}>
+                      Some fields need extra verification. Double-check against the original document.
+                    </p>
                   </div>
                 )}
 
+                {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Original Document */}
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">📄 Original Document</h2>
+                  <div className={`rounded-lg shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      📄 Original Document
+                    </h2>
                     {filePreview && (
-                      <div className="border rounded-lg overflow-hidden">
-                        {file.type === 'application/pdf' ? (
-                          <iframe src={filePreview} className="w-full h-96" title="PDF Preview" />
+                      <div className="border rounded-lg overflow-hidden relative">
+                        {file?.type === 'application/pdf' ? (
+                          <iframe 
+                            src={filePreview} 
+                            className="w-full h-96" 
+                            title="PDF Preview" 
+                          />
                         ) : (
-                          <img src={filePreview} alt="Uploaded document" className="w-full" />
+                          <img 
+                            src={filePreview} 
+                            alt="Uploaded document" 
+                            className="w-full" 
+                          />
+                        )}
+                        {/* Location Indicator */}
+                        {highlightedField && extractedData[highlightedField]?.location && (
+                          <div className={`absolute bottom-0 left-0 right-0 p-3 ${
+                            darkMode ? 'bg-blue-900 bg-opacity-95' : 'bg-blue-100 bg-opacity-95'
+                          }`}>
+                            <p className={`text-sm font-medium ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+                              📍 <strong>{fieldLabels[highlightedField]}:</strong> {extractedData[highlightedField].location}
+                            </p>
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
 
                   {/* Extracted Data */}
-                  <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">Extracted Information</h2>
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                  <div className={`rounded-lg shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      📋 Extracted Information
+                    </h2>
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                       {Object.entries(extractedData).map(([key, value]) => (
-                        <div key={key} className={`border-2 rounded-lg p-4 ${
-                          value.confidence === 'low' ? 'border-red-300 bg-red-50' :
-                          value.confidence === 'medium' ? 'border-yellow-300 bg-yellow-50' :
-                          'border-green-300 bg-green-50'
-                        }`}>
-                          <div className="flex items-start justify-between mb-2">
-                            <h3 className="font-bold text-gray-900">{fieldLabels[key]}</h3>
-                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getConfidenceBadge(value.confidence)}`}>
-                              {value.confidence.toUpperCase()}
-                            </span>
+                        <div 
+                          key={key} 
+                          className={`border-2 rounded-lg p-4 transition-all duration-300 ${
+                            highlightedField === key 
+                              ? 'ring-2 ring-blue-500 ring-offset-2' 
+                              : ''
+                          } ${
+                            value.confidence === 'low' 
+                              ? darkMode ? 'border-red-700 bg-red-900' : 'border-red-300 bg-red-50' 
+                              : value.confidence === 'medium' 
+                                ? darkMode ? 'border-yellow-700 bg-yellow-900' : 'border-yellow-300 bg-yellow-50'
+                                : darkMode ? 'border-green-700 bg-green-900' : 'border-green-300 bg-green-50'
+                          }`}
+                        >
+                          {/* Field Header */}
+                          <div className="flex items-start justify-between mb-3">
+                            <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {fieldLabels[key]}
+                            </h3>
+                            <div className="flex items-center space-x-2">
+                              {value.location && (
+                                <button
+                                  onClick={() => highlightFieldInDocument(key)}
+                                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                    highlightedField === key
+                                      ? 'bg-blue-600 text-white'
+                                      : darkMode 
+                                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                  title="Show location in document"
+                                >
+                                  📍 Location
+                                </button>
+                              )}
+                              <span className={`px-2 py-1 rounded text-xs font-medium border ${getConfidenceBadge(value.confidence)}`}>
+                                {value.confidence.toUpperCase()}
+                              </span>
+                            </div>
                           </div>
                           
+                          {/* Extracted Data */}
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-gray-700 mb-1">Extracted Data:</p>
-                            <p className="text-gray-900 bg-white p-2 rounded border">{value.data}</p>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Extracted Data:
+                            </p>
+                            <p className={`p-3 rounded border ${
+                              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900'
+                            }`}>
+                              {value.data}
+                            </p>
                           </div>
 
+                          {/* Source Quote */}
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-gray-700 mb-1">Source from Document:</p>
-                            <p className="text-xs text-gray-600 bg-white p-2 rounded border italic">"{value.source}"</p>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Source from Document:
+                            </p>
+                            <p className={`text-sm p-3 rounded border italic ${
+                              darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'
+                            }`}>
+                              "{value.source}"
+                            </p>
                           </div>
 
-                          {value.notes && (
+                          {/* Location */}
+                          {value.location && (
                             <div className="mb-3">
-                              <p className="text-sm font-medium text-gray-700 mb-1">AI Notes:</p>
-                              <p className="text-sm text-gray-600 bg-white p-2 rounded border">{value.notes}</p>
+                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                📍 Location in Document:
+                              </p>
+                              <p className={`text-sm p-2 rounded border ${
+                                darkMode ? 'bg-gray-700 border-gray-600 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
+                              }`}>
+                                {value.location}
+                              </p>
                             </div>
                           )}
 
+                          {/* AI Notes */}
+                          {value.notes && (
+                            <div className="mb-3">
+                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                🤖 AI Notes:
+                              </p>
+                              <p className={`text-sm p-2 rounded border ${
+                                darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'
+                              }`}>
+                                {value.notes}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* User Notes */}
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-gray-700 mb-1">📝 Your Notes:</p>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              📝 Your Notes:
+                            </p>
                             <textarea
                               value={userNotes[key] || ''}
                               onChange={(e) => updateUserNote(key, e.target.value)}
                               placeholder="Add your own notes or corrections..."
-                              className="w-full p-2 border rounded text-sm"
+                              className={`w-full p-3 border rounded text-sm ${
+                                darkMode 
+                                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                                  : 'bg-white border-gray-200'
+                              }`}
                               rows="2"
                             />
                           </div>
 
-                          <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                          {/* Actions */}
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                             <label className="flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
@@ -728,11 +1270,13 @@ CRITICAL RULES:
                                 onChange={() => toggleVerification(key)}
                                 className="h-4 w-4 text-blue-600 rounded mr-2"
                               />
-                              <span className="text-sm font-medium text-gray-700">Manually Verified</span>
+                              <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                ✓ Manually Verified
+                              </span>
                             </label>
                             <button
-                              onClick={() => copyToClipboard(value.data)}
-                              className="text-blue-600 hover:text-blue-700 text-sm"
+                              onClick={() => copyToClipboard(value.data, fieldLabels[key])}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                             >
                               📋 Copy
                             </button>
@@ -743,17 +1287,27 @@ CRITICAL RULES:
 
                     {/* Verification Status */}
                     <div className={`mt-6 p-4 rounded-lg border-2 ${
-                      allVerified ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-300'
+                      allVerified 
+                        ? darkMode ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-300'
+                        : darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'
                     }`}>
                       {allVerified ? (
                         <div>
-                          <p className="font-bold text-green-900">✅ All Fields Verified</p>
-                          <p className="text-sm text-green-700">You can now use this data for payment processing</p>
+                          <p className={`font-bold ${darkMode ? 'text-green-200' : 'text-green-900'}`}>
+                            ✅ All Fields Verified
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            You can now use this data for payment processing
+                          </p>
                         </div>
                       ) : (
                         <div>
-                          <p className="font-bold text-gray-900">⚠️ Verification Required</p>
-                          <p className="text-sm text-gray-700">Check all boxes after verifying against the original document</p>
+                          <p className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                            ⚠️ Verification Required
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-700'}`}>
+                            Check all boxes after verifying against the original document
+                          </p>
                         </div>
                       )}
                     </div>
