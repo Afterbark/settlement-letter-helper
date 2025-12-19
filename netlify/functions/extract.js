@@ -29,11 +29,13 @@ exports.handler = async function(event, context) {
   try {
     const payload = JSON.parse(event.body);
 
-    // 2. Setup Timeout Controller (Stop at 9.5 seconds to avoid Netlify 504 crash)
+    // 2. SAFETY TIMEOUT: Netlify Free Tier kills processes at 10s. 
+    // We abort at 9.5s to return a clean error instead of a 504 crash.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 9500);
 
-    // 3. Call Anthropic with the "Latest" Alias (Safest for compatibility)
+    // 3. Call Anthropic with the REAL, STABLE Model ID
+    // We override whatever the frontend sent to ensure we use the valid ID.
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -42,7 +44,7 @@ exports.handler = async function(event, context) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-latest', // STABLE ALIAS
+        model: 'claude-3-5-sonnet-20241022', // <--- THE DEFINITIVE STABLE MODEL ID
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -53,7 +55,7 @@ exports.handler = async function(event, context) {
             },
             {
               type: 'text',
-              // Optimized prompt to be faster (saves ~2 seconds of processing)
+              // Optimized prompt (shorter = faster processing)
               text: `Extract debt settlement details. RETURN JSON ONLY.
 
 STRUCTURE:
@@ -103,12 +105,12 @@ RULES:
   } catch (error) {
     console.error("Function Error:", error);
     
-    // Handle the specific timeout error gracefully
+    // Graceful handling of the 10s limit
     if (error.name === 'AbortError') {
       return {
         statusCode: 504,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "Timeout: The document was too large to process in 10 seconds. Please try uploading a screenshot (Image) instead of a PDF, or just the first page." })
+        body: JSON.stringify({ error: "Timeout: The document is too large for the 10s limit. Please upload a SCREENSHOT (PNG/JPG) of the page instead of the PDF." })
       };
     }
 
