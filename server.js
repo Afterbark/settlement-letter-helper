@@ -9,19 +9,29 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Increased limit for large images/PDFs
-app.use(express.static(__dirname)); // Serve index.html from root
+app.use(express.json({ limit: '50mb' }));
+app.use(express.static(__dirname));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // API Endpoint
 app.post('/extract', async (req, res) => {
   const API_KEY = process.env.ANTHROPIC_API_KEY;
 
   if (!API_KEY) {
-    return res.status(500).json({ error: "API Key is not configured in Heroku Config Vars." });
+    console.error('❌ ANTHROPIC_API_KEY not found in environment variables');
+    return res.status(500).json({ 
+      error: "API Key is not configured. Please set ANTHROPIC_API_KEY in Heroku Config Vars." 
+    });
   }
 
   try {
-    // Safety Timeout (Heroku has a 30s limit, we stop at 28s)
+    console.log('📤 Processing document extraction request...');
+    
+    // Heroku has a 30s timeout, abort at 28s
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 28000);
 
@@ -33,7 +43,7 @@ app.post('/extract', async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // Stable Model
+        model: 'claude-sonnet-4-20250514', // Latest Sonnet 4
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -44,29 +54,98 @@ app.post('/extract', async (req, res) => {
             },
             {
               type: 'text',
-              text: `Extract debt settlement details. RETURN JSON ONLY.
+              text: `Extract debt settlement payment details from this document. Return ONLY valid JSON with no markdown formatting.
 
-STRUCTURE:
+REQUIRED JSON STRUCTURE:
 {
-  "paymentBreakdown": { "data": "...", "confidence": "high|medium|low", "source": "...", "notes": "...", "location": "..." },
-  "firstPaymentDate": { "data": "...", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "currentBalance": { "data": "...", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "fees": { "data": "List fees or 'None'", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "signatureRequired": { "data": "YES or NO", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "remittanceTo": { "data": "Entity Name", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "mailingAddress": { "data": "Address", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "checkPayableTo": { "data": "Payable Name", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "clientName": { "data": "Name", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "referenceNumber": { "data": "Ref Number", "confidence": "...", "source": "...", "notes": "...", "location": "..." },
-  "additionalInstructions": { "data": "Instructions", "confidence": "...", "source": "...", "notes": "...", "location": "..." }
+  "paymentBreakdown": {
+    "data": "Payment schedule with amounts and dates",
+    "confidence": "high|medium|low",
+    "source": "Exact quote from document",
+    "notes": "Any clarifications",
+    "location": "Where found in document"
+  },
+  "firstPaymentDate": {
+    "data": "First payment due date",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "currentBalance": {
+    "data": "Total settlement amount",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "fees": {
+    "data": "List all fees or 'None'",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "signatureRequired": {
+    "data": "YES or NO",
+    "confidence": "high|medium|low",
+    "source": "Exact quote or explanation",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "remittanceTo": {
+    "data": "Entity name that receives payment",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Default to letterhead if not stated",
+    "location": "Location description"
+  },
+  "mailingAddress": {
+    "data": "Complete mailing address for payment",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Default to letterhead if not stated",
+    "location": "Location description"
+  },
+  "checkPayableTo": {
+    "data": "Name for check payable",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Only if explicitly stated",
+    "location": "Location description"
+  },
+  "clientName": {
+    "data": "Client/debtor name",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "referenceNumber": {
+    "data": "Account/reference number",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Any clarifications",
+    "location": "Location description"
+  },
+  "additionalInstructions": {
+    "data": "Any special payment instructions",
+    "confidence": "high|medium|low",
+    "source": "Exact quote",
+    "notes": "Include special requirements",
+    "location": "Location description"
+  }
 }
 
-RULES:
-1. payableTo: Only if explicit "Make check payable to". Else default to Creditor.
-2. remitTo: Entity receiving mail. Default to Letterhead.
-3. mailingAddress: Payment address. Default to Letterhead.
-4. fees: List Court Costs/Attorney Fees.
-5. signature: YES if client must sign.`
+EXTRACTION RULES:
+1. If information not found, use "NOT FOUND" as data value
+2. Confidence levels:
+   - high: Clearly stated and unambiguous
+   - medium: Implied or requires interpretation
+   - low: Unclear or possibly incorrect
+3. Source must be exact text from document
+4. Location describes where in document
+5. Return ONLY the JSON object, no markdown code blocks`
             }
           ]
         }]
@@ -78,21 +157,36 @@ RULES:
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
+      console.error('❌ API Error:', response.status, errData);
       throw new Error(errData.error?.message || `API Error: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log('✅ Document processed successfully');
     res.json(data);
 
   } catch (error) {
-    console.error("Server Error:", error);
+    console.error('❌ Server Error:', error.name, error.message);
+    
     if (error.name === 'AbortError') {
-      return res.status(504).json({ error: "Timeout: Heroku limit reached (28s). Please upload a smaller screenshot." });
+      return res.status(504).json({ 
+        error: "Timeout: Processing took longer than 28 seconds. Please upload a smaller file or screenshot instead of full PDF." 
+      });
     }
-    res.status(500).json({ error: error.message });
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to process document' 
+    });
   }
 });
 
+// Catch-all route - serve index.html for any other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔑 API Key configured: ${!!process.env.ANTHROPIC_API_KEY}`);
 });
