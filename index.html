@@ -11,9 +11,7 @@
   <script>
     tailwind.config = {
       darkMode: 'class',
-      theme: {
-        extend: {}
-      }
+      theme: { extend: {} }
     }
   </script>
   <style>
@@ -102,11 +100,9 @@
       async decrypt(encryptedData) {
         try {
           const key = await this.getStoredKey();
-          
           const combined = new Uint8Array(
             atob(encryptedData).split('').map(c => c.charCodeAt(0))
           );
-
           const iv = combined.slice(0, 12);
           const data = combined.slice(12);
 
@@ -125,10 +121,10 @@
       }
     };
 
-    // ==================== TOAST NOTIFICATION COMPONENT ====================
+    // ==================== TOAST COMPONENT ====================
     function Toast({ message, type, onClose }) {
       useEffect(() => {
-        const timer = setTimeout(onClose, 2500);
+        const timer = setTimeout(onClose, 3000);
         return () => clearTimeout(timer);
       }, [onClose]);
 
@@ -136,21 +132,21 @@
                       type === 'error' ? 'bg-red-500' : 'bg-blue-500';
 
       return (
-        <div className={`fixed top-4 right-4 z-50 toast-enter ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2`}>
-          <span>{type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-          <span>{message}</span>
+        <div className={`fixed top-4 right-4 z-50 toast-enter ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 max-w-md`}>
+          <span className="text-xl">{type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+          <span className="font-medium">{message}</span>
         </div>
       );
     }
 
-    // ==================== CONFIRMATION MODAL COMPONENT ====================
+    // ==================== CONFIRMATION MODAL ====================
     function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, isDark }) {
       if (!isOpen) return null;
 
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black opacity-50" onClick={onCancel}></div>
-          <div className={`relative z-10 p-6 rounded-lg shadow-xl max-w-md w-full mx-4 ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+          <div className={`relative z-10 p-6 rounded-lg shadow-xl max-w-md w-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
             <h3 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
             <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{message}</p>
             <div className="flex space-x-3 justify-end">
@@ -164,7 +160,7 @@
                 onClick={onConfirm}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
               >
-                Yes, Confirm
+                Confirm
               </button>
             </div>
           </div>
@@ -172,7 +168,7 @@
       );
     }
 
-    // ==================== MAIN APP COMPONENT ====================
+    // ==================== MAIN APP ====================
     function SettlementExtractorPro() {
       const [file, setFile] = useState(null);
       const [filePreview, setFilePreview] = useState(null);
@@ -187,17 +183,12 @@
       const [compareItems, setCompareItems] = useState([]);
       const [validationErrors, setValidationErrors] = useState([]);
       const [currentRecordId, setCurrentRecordId] = useState(null);
-      
-      // Enhanced features state
-      const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem('darkMode') === 'true';
-      });
+      const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
       const [toast, setToast] = useState(null);
       const [isDragging, setIsDragging] = useState(false);
       const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null });
       const [highlightedField, setHighlightedField] = useState(null);
 
-      // UPDATED Field labels to include your new fields
       const fieldLabels = {
         paymentBreakdown: 'Payment Breakdown',
         firstPaymentDate: 'First Payment Date',
@@ -212,38 +203,27 @@
         additionalInstructions: 'Additional Instructions'
       };
 
-      // Apply dark mode
       useEffect(() => {
-        if (darkMode) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        document.documentElement.classList.toggle('dark', darkMode);
         localStorage.setItem('darkMode', darkMode);
       }, [darkMode]);
 
-      // Load encrypted records on mount
       useEffect(() => {
         const loadRecords = async () => {
           const encrypted = localStorage.getItem('encryptedRecords');
           if (encrypted) {
             const decrypted = await CryptoUtils.decrypt(encrypted);
-            if (decrypted) {
-              setSavedRecords(decrypted);
-            }
+            if (decrypted) setSavedRecords(decrypted);
           }
         };
         loadRecords();
       }, []);
 
-      // Save encrypted records when changed
       useEffect(() => {
         const saveRecords = async () => {
           if (savedRecords.length > 0) {
             const encrypted = await CryptoUtils.encrypt(savedRecords);
-            if (encrypted) {
-              localStorage.setItem('encryptedRecords', encrypted);
-            }
+            if (encrypted) localStorage.setItem('encryptedRecords', encrypted);
           } else {
             localStorage.removeItem('encryptedRecords');
           }
@@ -251,22 +231,17 @@
         saveRecords();
       }, [savedRecords]);
 
-      // Show toast notification
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-      };
+      const showToast = (message, type = 'success') => setToast({ message, type });
 
-      // Copy to clipboard with toast notification
       const copyToClipboard = async (text, fieldName = 'Data') => {
         try {
           await navigator.clipboard.writeText(text);
-          showToast(`${fieldName} copied to clipboard!`, 'success');
-        } catch (err) {
+          showToast(`${fieldName} copied!`, 'success');
+        } catch {
           showToast('Failed to copy', 'error');
         }
       };
 
-      // Drag and drop handlers
       const handleDragEnter = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -290,12 +265,12 @@
         setIsDragging(false);
 
         const files = e.dataTransfer.files;
-        if (files && files.length > 0) {
+        if (files?.length > 0) {
           const droppedFile = files[0];
           if (droppedFile.type === 'application/pdf' || droppedFile.type.startsWith('image/')) {
             handleFileProcess(droppedFile);
           } else {
-            showToast('Please upload a PDF or image file', 'error');
+            showToast('Please upload PDF or image file', 'error');
           }
         }
       }, []);
@@ -314,40 +289,34 @@
         reader.onload = (e) => setFilePreview(e.target.result);
         reader.readAsDataURL(uploadedFile);
         
-        showToast(`File "${uploadedFile.name}" loaded!`, 'success');
+        showToast(`File loaded: ${uploadedFile.name}`, 'success');
       };
 
-      const handleFileUpload = async (e) => {
-        const uploadedFile = e.target.files[0];
-        if (!uploadedFile) return;
-        handleFileProcess(uploadedFile);
+      const handleFileUpload = (e) => {
+        const uploadedFile = e.target.files?.[0];
+        if (uploadedFile) handleFileProcess(uploadedFile);
       };
 
       const validateExtractedData = (data) => {
         const errors = [];
 
-        if (data.paymentBreakdown.data === 'NOT FOUND') {
-          errors.push({ field: 'Payment Breakdown', message: 'CRITICAL: Payment breakdown is missing', severity: 'critical' });
+        if (data.paymentBreakdown?.data === 'NOT FOUND') {
+          errors.push({ field: 'Payment Breakdown', message: 'CRITICAL: Payment breakdown missing', severity: 'critical' });
         }
-        if (data.firstPaymentDate.data === 'NOT FOUND') {
+        if (data.firstPaymentDate?.data === 'NOT FOUND') {
           errors.push({ field: 'First Payment Date', message: 'WARNING: First payment date not found', severity: 'high' });
         }
-        if (data.mailingAddress.data === 'NOT FOUND') {
-          errors.push({ field: 'Mailing Address', message: 'CRITICAL: Mailing address is missing', severity: 'critical' });
+        if (data.mailingAddress?.data === 'NOT FOUND') {
+          errors.push({ field: 'Mailing Address', message: 'CRITICAL: Mailing address missing', severity: 'critical' });
         }
         
-        // Removed the check that PayableTo must exist - relying on extraction logic now.
-        
-        const address = data.mailingAddress.data;
-        if (address !== 'NOT FOUND') {
-          if (!address.match(/\d{5}(-\d{4})?/)) {
-            errors.push({ field: 'Mailing Address', message: 'Address may be missing ZIP code', severity: 'medium' });
-          }
+        const address = data.mailingAddress?.data;
+        if (address && address !== 'NOT FOUND' && !address.match(/\d{5}(-\d{4})?/)) {
+          errors.push({ field: 'Mailing Address', message: 'Address may be missing ZIP code', severity: 'medium' });
         }
         
-        // Check for signature required
-        if (data.signatureRequired && data.signatureRequired.data.toUpperCase() === 'YES') {
-            errors.push({ field: 'Signature Required', message: 'INFO: Client signature is required for this settlement.', severity: 'high' });
+        if (data.signatureRequired?.data?.toUpperCase() === 'YES') {
+          errors.push({ field: 'Signature Required', message: 'INFO: Client signature required', severity: 'high' });
         }
 
         return errors;
@@ -369,63 +338,40 @@
 
           const mediaType = file.type === 'application/pdf' ? 'application/pdf' : 
                             file.type.startsWith('image/') ? file.type : 'image/jpeg';
-
           const contentType = file.type === 'application/pdf' ? 'document' : 'image';
 
           const response = await fetch('/.netlify/functions/extract', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 4096,
               messages: [{
                 role: 'user',
-                content: [
-                  {
-                    type: contentType,
-                    source: {
-                      type: 'base64',
-                      media_type: mediaType,
-                      data: base64Data
-                    }
+                content: [{
+                  type: contentType,
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType,
+                    data: base64Data
                   }
-                ]
+                }]
               }]
             })
           });
 
           if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error?.message || `API Error: ${response.status} ${response.statusText}`);
+            throw new Error(errData.error || `Server error: ${response.status}`);
           }
 
           const data = await response.json();
-          const text = data.content.map(item => item.type === 'text' ? item.text : '').join('\n');
+          const text = data.content?.map(item => item.type === 'text' ? item.text : '').join('\n') || '';
           const cleaned = text.replace(/```json|```/g, '').trim();
-          let parsed = JSON.parse(cleaned);
-
-          // Check if we need to search for address online (kept same logic as before)
-          const needsAddressSearch = 
-            parsed.mailingAddress.data === 'NOT FOUND' || 
-            parsed.mailingAddress.confidence === 'low' ||
-            parsed.mailingAddress.data.toLowerCase().includes('p.o. box') ||
-            parsed.mailingAddress.data.toLowerCase().includes('po box');
-
-          const creditorName = parsed.remittanceTo.data !== 'NOT FOUND' ? parsed.remittanceTo.data : parsed.checkPayableTo.data;
-
-          if (needsAddressSearch && creditorName && creditorName !== 'NOT FOUND') {
-            // Address search logic (simplified here to maintain code structure from your previous version)
-            // This part remains functional as per original design
-          }
+          const parsed = JSON.parse(cleaned);
 
           setExtractedData(parsed);
           
           const initialVerifications = {};
-          Object.keys(parsed).forEach(key => {
-            initialVerifications[key] = false;
-          });
+          Object.keys(parsed).forEach(key => { initialVerifications[key] = false; });
           setVerifications(initialVerifications);
 
           const errors = validateExtractedData(parsed);
@@ -435,8 +381,8 @@
 
         } catch (err) {
           console.error('Extraction error:', err);
-          setError(`Failed to process document: ${err.message}.`);
-          showToast('Failed to process document', 'error');
+          setError(err.message || 'Failed to process document');
+          showToast('Processing failed', 'error');
         } finally {
           setLoading(false);
         }
@@ -446,10 +392,6 @@
         if (!extractedData) return;
 
         const recordId = currentRecordId || `record_${Date.now()}`;
-        
-        // FIX FOR UNLIMITED STORAGE: 
-        // We set filePreview to NULL. Storing base64 images in localStorage hits the 5MB limit immediately.
-        // Storing just the text data allows for thousands of records.
         const record = {
           id: recordId,
           timestamp: new Date().toISOString(),
@@ -458,15 +400,12 @@
           verifications,
           userNotes,
           validationErrors,
-          filePreview: null // Set to null to allow unlimited text storage
+          filePreview: null
         };
 
-        const updatedRecords = savedRecords.filter(r => r.id !== recordId);
-        updatedRecords.unshift(record);
-        
-        setSavedRecords(updatedRecords);
+        setSavedRecords(prev => [record, ...prev.filter(r => r.id !== recordId)]);
         setCurrentRecordId(recordId);
-        showToast('Record saved (text only)!', 'success');
+        showToast('Record saved successfully!', 'success');
       };
 
       const loadRecord = (recordId) => {
@@ -476,14 +415,11 @@
           setVerifications(record.verifications);
           setUserNotes(record.userNotes || {});
           setValidationErrors(record.validationErrors || []);
-          
-          // Since we don't save the image anymore to save space, we clear the preview
           setFilePreview(null);
           setFile({ name: record.fileName, type: 'unknown' });
-          
           setCurrentRecordId(recordId);
           setCurrentView('upload');
-          showToast('Record loaded (No image preview available)', 'info');
+          showToast('Record loaded', 'info');
         }
       };
 
@@ -491,10 +427,9 @@
         setConfirmModal({
           isOpen: true,
           title: 'Delete Record?',
-          message: 'Are you sure you want to delete this record?',
+          message: 'This action cannot be undone.',
           action: () => {
-            const updatedRecords = savedRecords.filter(r => r.id !== recordId);
-            setSavedRecords(updatedRecords);
+            setSavedRecords(prev => prev.filter(r => r.id !== recordId));
             showToast('Record deleted', 'success');
             setConfirmModal({ isOpen: false, action: null });
           }
@@ -504,8 +439,8 @@
       const clearAllData = () => {
         setConfirmModal({
           isOpen: true,
-          title: 'Clear All Data?',
-          message: 'Are you sure you want to clear all current data?',
+          title: 'Clear Current Data?',
+          message: 'This will clear the current document. Saved records are not affected.',
           action: () => {
             setExtractedData(null);
             setFile(null);
@@ -515,7 +450,7 @@
             setValidationErrors([]);
             setCurrentRecordId(null);
             setHighlightedField(null);
-            showToast('All data cleared', 'success');
+            showToast('Data cleared', 'success');
             setConfirmModal({ isOpen: false, action: null });
           }
         });
@@ -535,63 +470,59 @@
           verifications[key] ? 'Yes' : 'No'
         ]);
 
-        const csv = [headers, ...rows].map(row => 
-          row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-        ).join('\n');
+        const csv = [headers, ...rows]
+          .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
 
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `settlement-${file?.name || 'export'}-${Date.now()}.csv`;
+        a.download = `settlement-${Date.now()}.csv`;
         a.click();
+        URL.revokeObjectURL(url);
         
         showToast('CSV exported!', 'success');
       };
 
       const copyAllData = () => {
         if (!extractedData) return;
-        const text = Object.entries(extractedData).map(([key, value]) => 
-          `${fieldLabels[key] || key}: ${value.data}`
-        ).join('\n\n');
+        const text = Object.entries(extractedData)
+          .map(([key, value]) => `${fieldLabels[key] || key}: ${value.data}`)
+          .join('\n\n');
         copyToClipboard(text, 'All data');
       };
 
       const toggleVerification = (field) => {
-        setVerifications(prev => ({
-          ...prev,
-          [field]: !prev[field]
-        }));
+        setVerifications(prev => ({ ...prev, [field]: !prev[field] }));
       };
 
       const updateUserNote = (field, note) => {
-        setUserNotes(prev => ({
-          ...prev,
-          [field]: note
-        }));
+        setUserNotes(prev => ({ ...prev, [field]: note }));
       };
 
       const addToCompare = () => {
-        if (extractedData && compareItems.length < 3) {
-          setCompareItems([...compareItems, {
-            id: Date.now(),
-            fileName: file.name,
-            data: extractedData
-          }]);
-          showToast('Added to comparison!', 'success');
+        if (!extractedData) return;
+        if (compareItems.length >= 3) {
+          showToast('Maximum 3 items for comparison', 'error');
+          return;
         }
+        setCompareItems(prev => [...prev, {
+          id: Date.now(),
+          fileName: file.name,
+          data: extractedData
+        }]);
+        showToast('Added to comparison!', 'success');
       };
 
       const removeFromCompare = (id) => {
-        setCompareItems(compareItems.filter(item => item.id !== id));
-        showToast('Removed from comparison', 'success');
+        setCompareItems(prev => prev.filter(item => item.id !== id));
       };
 
       const highlightFieldInDocument = (fieldKey) => {
-        setHighlightedField(highlightedField === fieldKey ? null : fieldKey);
+        setHighlightedField(prev => prev === fieldKey ? null : fieldKey);
       };
 
-      // Computed values
       const allVerified = extractedData && Object.keys(verifications).every(key => verifications[key]);
       const hasLowConfidence = extractedData && Object.values(extractedData).some(item => item.confidence === 'low');
       const hasMediumConfidence = extractedData && Object.values(extractedData).some(item => item.confidence === 'medium');
@@ -600,43 +531,26 @@
 
       const getConfidenceBadge = (confidence) => {
         const colors = {
-          high: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700',
-          medium: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700',
-          low: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200 dark:border-red-700'
+          high: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200',
+          medium: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200',
+          low: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200'
         };
         return colors[confidence] || colors.low;
       };
 
       const filteredRecords = savedRecords.filter(record => {
-        const searchLower = searchTerm.toLowerCase();
-        return record.fileName.toLowerCase().includes(searchLower) ||
-               (record.extractedData.clientName && record.extractedData.clientName.data.toLowerCase().includes(searchLower));
+        const search = searchTerm.toLowerCase();
+        return record.fileName.toLowerCase().includes(search) ||
+               record.extractedData.clientName?.data?.toLowerCase().includes(search) ||
+               record.extractedData.checkPayableTo?.data?.toLowerCase().includes(search);
       });
 
-      // ==================== RENDER ====================
       return (
-        <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-          {/* Toast Notification */}
-          {toast && (
-            <Toast 
-              message={toast.message} 
-              type={toast.type} 
-              onClose={() => setToast(null)} 
-            />
-          )}
+        <div className={`min-h-screen transition-colors ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+          <ConfirmModal {...confirmModal} onCancel={() => setConfirmModal({ isOpen: false, action: null })} isDark={darkMode} />
 
-          {/* Confirmation Modal */}
-          <ConfirmModal
-            isOpen={confirmModal.isOpen}
-            title={confirmModal.title}
-            message={confirmModal.message}
-            onConfirm={confirmModal.action}
-            onCancel={() => setConfirmModal({ isOpen: false, action: null })}
-            isDark={darkMode}
-          />
-
-          {/* Navigation Header */}
-          <div className={`border-b shadow-sm transition-colors duration-300 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
+          <div className={`border-b shadow-sm ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
             <div className="max-w-7xl mx-auto px-6 py-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center space-x-3">
@@ -647,136 +561,88 @@
                     🔒 Encrypted
                   </span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 flex-wrap">
                   <button
                     onClick={() => setDarkMode(!darkMode)}
-                    className={`p-2 rounded-lg font-medium transition-colors ${
-                      darkMode 
-                        ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' 
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                    title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                    className={`p-2 rounded-lg transition ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
                   >
                     {darkMode ? '☀️' : '🌙'}
                   </button>
-                  <button
-                    onClick={() => setCurrentView('upload')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      currentView === 'upload' 
-                        ? 'bg-blue-600 text-white' 
-                        : darkMode 
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    New Upload
-                  </button>
-                  <button
-                    onClick={() => setCurrentView('history')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      currentView === 'history' 
-                        ? 'bg-blue-600 text-white' 
-                        : darkMode 
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    History ({savedRecords.length})
-                  </button>
-                  <button
-                    onClick={() => setCurrentView('compare')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      currentView === 'compare' 
-                        ? 'bg-blue-600 text-white' 
-                        : darkMode 
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    Compare ({compareItems.length})
-                  </button>
+                  {['upload', 'history', 'compare'].map(view => (
+                    <button
+                      key={view}
+                      onClick={() => setCurrentView(view)}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${
+                        currentView === view 
+                          ? 'bg-blue-600 text-white' 
+                          : darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {view === 'upload' ? 'New Upload' : view === 'history' ? `History (${savedRecords.length})` : `Compare (${compareItems.length})`}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="max-w-7xl mx-auto p-6">
-            {/* ==================== HISTORY VIEW ==================== */}
             {currentView === 'history' && (
-              <div className={`rounded-lg shadow-sm p-6 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className={`rounded-lg shadow p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                   <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Saved Records</h2>
                   <input
                     type="text"
-                    placeholder="Search by client, creditor, or file..."
+                    placeholder="Search records..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className={`px-4 py-2 border rounded-lg w-80 transition-colors ${
-                      darkMode 
-                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                        : 'bg-white border-gray-300'
-                    }`}
+                    className={`px-4 py-2 border rounded-lg w-80 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300'}`}
                   />
                 </div>
 
                 {filteredRecords.length === 0 ? (
                   <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     <p className="text-4xl mb-4">📁</p>
-                    <p>No saved records found</p>
+                    <p>No records found</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {filteredRecords.map(record => (
-                      <div 
-                        key={record.id} 
-                        className={`border rounded-lg p-4 transition-colors ${
-                          darkMode 
-                            ? 'border-gray-700 hover:bg-gray-700' 
-                            : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
+                      <div key={record.id} className={`border rounded-lg p-4 ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'}`}>
                         <div className="flex items-start justify-between flex-wrap gap-4">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2 flex-wrap gap-2">
-                              <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                {record.fileName}
-                              </span>
+                            <div className="flex items-center space-x-3 mb-2 flex-wrap">
+                              <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{record.fileName}</span>
                               <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                {new Date(record.timestamp).toLocaleDateString()} {new Date(record.timestamp).toLocaleTimeString()}
+                                {new Date(record.timestamp).toLocaleString()}
                               </span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div>
-                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Client:</span>
-                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Client: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                                   {record.extractedData.clientName?.data || 'N/A'}
                                 </span>
                               </div>
                               <div>
-                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Creditor:</span>
-                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Creditor: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                                   {record.extractedData.checkPayableTo?.data || 'N/A'}
                                 </span>
                               </div>
                               <div>
-                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>First Payment:</span>
-                                <span className={`ml-2 font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>First Payment: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                                   {record.extractedData.firstPaymentDate?.data || 'N/A'}
                                 </span>
                               </div>
                             </div>
                           </div>
                           <div className="flex space-x-2">
-                            <button
-                              onClick={() => loadRecord(record.id)}
-                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
-                            >
+                            <button onClick={() => loadRecord(record.id)} className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
                               Load
                             </button>
-                            <button
-                              onClick={() => deleteRecord(record.id)}
-                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium"
-                            >
+                            <button onClick={() => deleteRecord(record.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium">
                               Delete
                             </button>
                           </div>
@@ -788,45 +654,28 @@
               </div>
             )}
 
-            {/* ==================== COMPARE VIEW ==================== */}
             {currentView === 'compare' && (
-              <div className={`rounded-lg shadow-sm p-6 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Compare Settlement Offers
-                </h2>
+              <div className={`rounded-lg shadow p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Compare Settlements</h2>
                 
                 {compareItems.length === 0 ? (
                   <div className={`text-center py-12 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     <p className="text-4xl mb-4">⚖️</p>
-                    <p>No items to compare. Process documents and add them to comparison.</p>
+                    <p>No items to compare</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {compareItems.map(item => (
-                      <div 
-                        key={item.id} 
-                        className={`border rounded-lg p-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
-                      >
+                      <div key={item.id} className={`border rounded-lg p-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className={`font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {item.fileName}
-                          </h3>
-                          <button
-                            onClick={() => removeFromCompare(item.id)}
-                            className="text-red-600 hover:text-red-700 font-bold"
-                          >
-                            ✕
-                          </button>
+                          <h3 className={`font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>{item.fileName}</h3>
+                          <button onClick={() => removeFromCompare(item.id)} className="text-red-600 hover:text-red-700 font-bold">✕</button>
                         </div>
                         <div className="space-y-3 text-sm">
                           {Object.entries(item.data).map(([key, value]) => (
                             <div key={key}>
-                              <span className={`block text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {fieldLabels[key] || key}
-                              </span>
-                              <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                                {value.data}
-                              </span>
+                              <span className={`block text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{fieldLabels[key] || key}</span>
+                              <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{value.data}</span>
                             </div>
                           ))}
                         </div>
@@ -837,16 +686,11 @@
               </div>
             )}
 
-            {/* ==================== UPLOAD VIEW ==================== */}
             {currentView === 'upload' && !extractedData && (
-              <div className={`rounded-lg shadow-sm p-8 transition-colors duration-300 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className={`rounded-lg shadow p-8 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
                 <div 
-                  className={`border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300 ${
-                    isDragging 
-                      ? 'drag-active border-blue-500' 
-                      : darkMode 
-                        ? 'border-gray-600 hover:border-blue-400' 
-                        : 'border-gray-300 hover:border-blue-400'
+                  className={`border-2 border-dashed rounded-lg p-12 text-center transition ${
+                    isDragging ? 'drag-active' : darkMode ? 'border-gray-600 hover:border-blue-400' : 'border-gray-300 hover:border-blue-400'
                   }`}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
@@ -855,37 +699,18 @@
                 >
                   <div className="text-5xl mb-4">{isDragging ? '📥' : '📄'}</div>
                   <label className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium text-lg">
-                      Click to upload
-                    </span>
+                    <span className="text-blue-600 hover:text-blue-700 font-medium text-lg">Click to upload</span>
                     <span className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}> or drag and drop</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={handleFileUpload}
-                    />
+                    <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileUpload} />
                   </label>
-                  <p className={`text-sm mt-4 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                    PDF, JPG, or PNG (max 10MB)
-                  </p>
-                  {isDragging && (
-                    <p className="text-blue-500 font-medium mt-4 text-lg">Drop your file here!</p>
-                  )}
+                  <p className={`text-sm mt-4 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>PDF, JPG, or PNG (max 10MB)</p>
                 </div>
 
-                {file && !loading && !extractedData && (
+                {file && !loading && (
                   <div className="mt-6">
-                    <div className={`flex items-center justify-between p-4 rounded-lg border flex-wrap gap-4 ${
-                      darkMode ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200'
-                    }`}>
-                      <span className={`text-sm font-medium ${darkMode ? 'text-blue-200' : 'text-gray-900'}`}>
-                        📎 {file.name}
-                      </span>
-                      <button
-                        onClick={processDocument}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                      >
+                    <div className={`flex items-center justify-between p-4 rounded-lg border ${darkMode ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200'}`}>
+                      <span className={`font-medium ${darkMode ? 'text-blue-200' : 'text-gray-900'}`}>📎 {file.name}</span>
+                      <button onClick={processDocument} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
                         🚀 Process Document
                       </button>
                     </div>
@@ -895,226 +720,107 @@
                 {loading && (
                   <div className="mt-6 text-center">
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    <p className={`mt-4 text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Analyzing document with AI...
-                    </p>
-                    <p className={`mt-1 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                      This may take a few seconds
-                    </p>
+                    <p className={`mt-4 text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Analyzing document...</p>
                   </div>
                 )}
 
                 {error && (
-                  <div className={`mt-6 p-4 rounded-lg border ${
-                    darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'
-                  }`}>
-                    <p className={`font-medium ${darkMode ? 'text-red-200' : 'text-red-800'}`}>
-                      ❌ Error
-                    </p>
+                  <div className={`mt-6 p-4 rounded-lg border ${darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'}`}>
+                    <p className={`font-medium ${darkMode ? 'text-red-200' : 'text-red-800'}`}>❌ Error</p>
                     <p className={darkMode ? 'text-red-300' : 'text-red-700'}>{error}</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* ==================== RESULTS VIEW ==================== */}
             {currentView === 'upload' && extractedData && (
               <div className="space-y-6">
-                {/* Action Buttons */}
-                <div className={`rounded-lg shadow-sm p-4 flex items-center justify-between flex-wrap gap-2 ${
-                  darkMode ? 'bg-gray-800' : 'bg-white'
-                }`}>
-                  <div className="flex space-x-2 flex-wrap gap-2">
-                    <button
-                      onClick={saveRecord}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-                    >
-                      💾 Save Record
-                    </button>
-                    <button
-                      onClick={exportToCSV}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                    >
-                      📥 Export CSV
-                    </button>
-                    <button
-                      onClick={copyAllData}
-                      className={`px-4 py-2 rounded-lg font-medium ${
-                        darkMode 
-                          ? 'bg-gray-700 text-white hover:bg-gray-600' 
-                          : 'bg-gray-600 text-white hover:bg-gray-700'
-                      }`}
-                    >
-                      📋 Copy All
-                    </button>
+                <div className={`rounded-lg shadow p-4 flex items-center justify-between flex-wrap gap-2 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                  <div className="flex space-x-2 flex-wrap">
+                    <button onClick={saveRecord} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">💾 Save</button>
+                    <button onClick={exportToCSV} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">📥 CSV</button>
+                    <button onClick={copyAllData} className={`px-4 py-2 rounded-lg font-medium ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-600 text-white hover:bg-gray-700'}`}>📋 Copy</button>
                     {compareItems.length < 3 && (
-                      <button
-                        onClick={addToCompare}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
-                      >
-                        ⚖️ Add to Compare
-                      </button>
+                      <button onClick={addToCompare} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium">⚖️ Compare</button>
                     )}
                   </div>
-                  <button
-                    onClick={clearAllData}
-                    className={`px-4 py-2 rounded-lg font-medium ${
-                      darkMode 
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    🔄 New Document
+                  <button onClick={clearAllData} className={`px-4 py-2 rounded-lg font-medium ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                    🔄 New
                   </button>
                 </div>
 
-                {/* Validation Errors */}
-                {validationErrors.length > 0 && (
-                  <div className="space-y-2">
-                    {criticalErrors.map((err, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`border-2 rounded-lg p-4 ${
-                          darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'
-                        }`}
-                      >
-                        <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>
-                          🚨 {err.field}
-                        </h3>
-                        <p className={darkMode ? 'text-red-300' : 'text-red-800'}>{err.message}</p>
-                      </div>
-                    ))}
-                    {highErrors.map((err, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`border-2 rounded-lg p-4 ${
-                          darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'
-                        }`}
-                      >
-                        <h3 className={`font-bold ${darkMode ? 'text-yellow-200' : 'text-yellow-900'}`}>
-                          ⚠️ {err.field}
-                        </h3>
-                        <p className={darkMode ? 'text-yellow-300' : 'text-yellow-800'}>{err.message}</p>
-                      </div>
-                    ))}
+                {criticalErrors.length > 0 && criticalErrors.map((err, i) => (
+                  <div key={i} className={`border-2 rounded-lg p-4 ${darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>🚨 {err.field}</h3>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-800'}>{err.message}</p>
                   </div>
-                )}
+                ))}
 
-                {/* Warning Banners */}
+                {highErrors.length > 0 && highErrors.map((err, i) => (
+                  <div key={i} className={`border-2 rounded-lg p-4 ${darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-yellow-200' : 'text-yellow-900'}`}>⚠️ {err.field}</h3>
+                    <p className={darkMode ? 'text-yellow-300' : 'text-yellow-800'}>{err.message}</p>
+                  </div>
+                ))}
+
                 {hasLowConfidence && (
-                  <div className={`border-2 rounded-lg p-4 ${
-                    darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'
-                  }`}>
-                    <h3 className={`font-bold mb-1 ${darkMode ? 'text-red-200' : 'text-red-900'}`}>
-                      🚨 CRITICAL: Low Confidence Data Detected
-                    </h3>
-                    <p className={darkMode ? 'text-red-300' : 'text-red-800'}>
-                      Some fields have LOW confidence. Review carefully before use - errors cost money!
-                    </p>
+                  <div className={`border-2 rounded-lg p-4 ${darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>🚨 Low Confidence Data</h3>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-800'}>Review carefully before use!</p>
                   </div>
                 )}
 
-                {hasMediumConfidence && !hasLowConfidence && (
-                  <div className={`border-2 rounded-lg p-4 ${
-                    darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'
-                  }`}>
-                    <h3 className={`font-bold mb-1 ${darkMode ? 'text-yellow-200' : 'text-yellow-900'}`}>
-                      ⚠️ WARNING: Medium Confidence Data
-                    </h3>
-                    <p className={darkMode ? 'text-yellow-300' : 'text-yellow-800'}>
-                      Some fields need extra verification. Double-check against the original document.
-                    </p>
-                  </div>
-                )}
-
-                {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Original Document */}
-                  <div className={`rounded-lg shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      📄 Original Document
-                    </h2>
+                  <div className={`rounded-lg shadow p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>📄 Original Document</h2>
                     {filePreview ? (
                       <div className="border rounded-lg overflow-hidden relative">
                         {file?.type === 'application/pdf' ? (
-                          <iframe 
-                            src={filePreview} 
-                            className="w-full h-96" 
-                            title="PDF Preview" 
-                          />
+                          <iframe src={filePreview} className="w-full h-96" title="PDF" />
                         ) : (
-                          <img 
-                            src={filePreview} 
-                            alt="Uploaded document" 
-                            className="w-full" 
-                          />
+                          <img src={filePreview} alt="Document" className="w-full" />
                         )}
-                        {/* Location Indicator */}
                         {highlightedField && extractedData[highlightedField]?.location && (
-                          <div className={`absolute bottom-0 left-0 right-0 p-3 ${
-                            darkMode ? 'bg-blue-900 bg-opacity-95' : 'bg-blue-100 bg-opacity-95'
-                          }`}>
+                          <div className={`absolute bottom-0 left-0 right-0 p-3 ${darkMode ? 'bg-blue-900 bg-opacity-95' : 'bg-blue-100 bg-opacity-95'}`}>
                             <p className={`text-sm font-medium ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
-                              📍 <strong>{fieldLabels[highlightedField] || highlightedField}:</strong> {extractedData[highlightedField].location}
+                              📍 <strong>{fieldLabels[highlightedField]}:</strong> {extractedData[highlightedField].location}
                             </p>
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className={`p-10 text-center border-2 border-dashed ${darkMode ? 'border-gray-600 text-gray-400' : 'border-gray-300 text-gray-500'}`}>
-                        <p>File preview not available for history items (to save storage space).</p>
-                        <p className="text-xs mt-2">Reload the original file to see preview.</p>
+                      <div className={`p-10 text-center border-2 border-dashed rounded ${darkMode ? 'border-gray-600 text-gray-400' : 'border-gray-300 text-gray-500'}`}>
+                        <p>Preview not available</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Extracted Data */}
-                  <div className={`rounded-lg shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      📋 Extracted Information
-                    </h2>
+                  <div className={`rounded-lg shadow p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>📋 Extracted Data</h2>
                     <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                       {Object.entries(extractedData).map(([key, value]) => (
                         <div 
                           key={key} 
-                          className={`border-2 rounded-lg p-4 transition-all duration-300 ${
-                            highlightedField === key 
-                              ? 'ring-2 ring-blue-500 ring-offset-2' 
-                              : ''
+                          className={`border-2 rounded-lg p-4 transition ${
+                            highlightedField === key ? 'ring-2 ring-blue-500' : ''
                           } ${
-                            value.confidence === 'low' 
-                              ? darkMode ? 'border-red-700 bg-red-900' : 'border-red-300 bg-red-50' 
-                              : value.confidence === 'medium' 
-                                ? darkMode ? 'border-yellow-700 bg-yellow-900' : 'border-yellow-300 bg-yellow-50'
-                                : darkMode ? 'border-green-700 bg-green-900' : 'border-green-300 bg-green-50'
+                            value.confidence === 'low' ? (darkMode ? 'border-red-700 bg-red-900' : 'border-red-300 bg-red-50') :
+                            value.confidence === 'medium' ? (darkMode ? 'border-yellow-700 bg-yellow-900' : 'border-yellow-300 bg-yellow-50') :
+                            (darkMode ? 'border-green-700 bg-green-900' : 'border-green-300 bg-green-50')
                           }`}
                         >
-                          {/* Field Header */}
                           <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center space-x-2">
-                              <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                {fieldLabels[key] || key}
-                              </h3>
-                              {value.webVerified && (
-                                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium dark:bg-blue-900 dark:text-blue-200">
-                                  🌐 Web Verified
-                                </span>
-                              )}
-                            </div>
+                            <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{fieldLabels[key] || key}</h3>
                             <div className="flex items-center space-x-2">
                               {value.location && (
                                 <button
                                   onClick={() => highlightFieldInDocument(key)}
-                                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                    highlightedField === key
-                                      ? 'bg-blue-600 text-white'
-                                      : darkMode 
-                                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  className={`px-2 py-1 rounded text-xs font-medium ${
+                                    highlightedField === key ? 'bg-blue-600 text-white' : 
+                                    darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                   }`}
-                                  title="Show location in document"
                                 >
-                                  📍 Location
+                                  📍
                                 </button>
                               )}
                               <span className={`px-2 py-1 rounded text-xs font-medium border ${getConfidenceBadge(value.confidence)}`}>
@@ -1123,78 +829,50 @@
                             </div>
                           </div>
                           
-                          {/* Extracted Data */}
                           <div className="mb-3">
-                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              Extracted Data:
-                            </p>
-                            <p className={`p-3 rounded border ${
-                              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900'
-                            }`}>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Data:</p>
+                            <p className={`p-3 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200'}`}>
                               {value.data}
                             </p>
                           </div>
 
-                          {/* Source Quote */}
                           <div className="mb-3">
-                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              Source from Document:
-                            </p>
-                            <p className={`text-sm p-3 rounded border italic ${
-                              darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'
-                            }`}>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Source:</p>
+                            <p className={`text-sm p-3 rounded border italic ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'}`}>
                               "{value.source}"
                             </p>
                           </div>
 
-                          {/* Location */}
                           {value.location && (
                             <div className="mb-3">
-                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                📍 Location in Document:
-                              </p>
-                              <p className={`text-sm p-2 rounded border ${
-                                darkMode ? 'bg-gray-700 border-gray-600 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
-                              }`}>
+                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>📍 Location:</p>
+                              <p className={`text-sm p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
                                 {value.location}
                               </p>
                             </div>
                           )}
 
-                          {/* AI Notes */}
                           {value.notes && (
                             <div className="mb-3">
-                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                🤖 AI Notes:
-                              </p>
-                              <p className={`text-sm p-2 rounded border ${
-                                darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'
-                              }`}>
+                              <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>🤖 Notes:</p>
+                              <p className={`text-sm p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'}`}>
                                 {value.notes}
                               </p>
                             </div>
                           )}
 
-                          {/* User Notes */}
                           <div className="mb-3">
-                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              📝 Your Notes:
-                            </p>
+                            <p className={`text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>📝 Your Notes:</p>
                             <textarea
                               value={userNotes[key] || ''}
                               onChange={(e) => updateUserNote(key, e.target.value)}
-                              placeholder="Add your own notes or corrections..."
-                              className={`w-full p-3 border rounded text-sm ${
-                                darkMode 
-                                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                                  : 'bg-white border-gray-200'
-                              }`}
+                              placeholder="Add notes..."
+                              className={`w-full p-3 border rounded text-sm ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-200'}`}
                               rows="2"
                             />
                           </div>
 
-                          {/* Actions */}
-                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t dark:border-gray-600">
                             <label className="flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
@@ -1202,14 +880,9 @@
                                 onChange={() => toggleVerification(key)}
                                 className="h-4 w-4 text-blue-600 rounded mr-2"
                               />
-                              <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                ✓ Manually Verified
-                              </span>
+                              <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>✓ Verified</span>
                             </label>
-                            <button
-                              onClick={() => copyToClipboard(value.data, fieldLabels[key] || key)}
-                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                            >
+                            <button onClick={() => copyToClipboard(value.data, fieldLabels[key])} className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                               📋 Copy
                             </button>
                           </div>
@@ -1217,29 +890,19 @@
                       ))}
                     </div>
 
-                    {/* Verification Status */}
                     <div className={`mt-6 p-4 rounded-lg border-2 ${
-                      allVerified 
-                        ? darkMode ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-300'
-                        : darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'
+                      allVerified ? (darkMode ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-300') :
+                      (darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300')
                     }`}>
                       {allVerified ? (
                         <div>
-                          <p className={`font-bold ${darkMode ? 'text-green-200' : 'text-green-900'}`}>
-                            ✅ All Fields Verified
-                          </p>
-                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
-                            You can now use this data for payment processing
-                          </p>
+                          <p className={`font-bold ${darkMode ? 'text-green-200' : 'text-green-900'}`}>✅ All Fields Verified</p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>Ready for processing</p>
                         </div>
                       ) : (
                         <div>
-                          <p className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                            ⚠️ Verification Required
-                          </p>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-700'}`}>
-                            Check all boxes after verifying against the original document
-                          </p>
+                          <p className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>⚠️ Verification Required</p>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-700'}`}>Check all boxes after verification</p>
                         </div>
                       )}
                     </div>
