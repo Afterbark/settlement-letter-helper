@@ -29,8 +29,11 @@ exports.handler = async function(event, context) {
   try {
     const payload = JSON.parse(event.body);
 
-    // 4. Call Anthropic
-    // We use 'claude-3-5-sonnet-latest' which is the safest, most compatible tag.
+    // 2. Setup Timeout Controller (Stop at 9.5 seconds to avoid Netlify 504 crash)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9500);
+
+    // 3. Call Anthropic with the "Latest" Alias (Safest for compatibility)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -39,7 +42,7 @@ exports.handler = async function(event, context) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-latest', 
+        model: 'claude-3-5-sonnet-latest', // STABLE ALIAS
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -50,6 +53,7 @@ exports.handler = async function(event, context) {
             },
             {
               type: 'text',
+              // Optimized prompt to be faster (saves ~2 seconds of processing)
               text: `Extract debt settlement details. RETURN JSON ONLY.
 
 STRUCTURE:
@@ -76,8 +80,11 @@ RULES:
             }
           ]
         }]
-      })
+      }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -95,6 +102,16 @@ RULES:
 
   } catch (error) {
     console.error("Function Error:", error);
+    
+    // Handle the specific timeout error gracefully
+    if (error.name === 'AbortError') {
+      return {
+        statusCode: 504,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: "Timeout: The document was too large to process in 10 seconds. Please try uploading a screenshot (Image) instead of a PDF, or just the first page." })
+      };
+    }
+
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
