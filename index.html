@@ -276,6 +276,12 @@
       }, []);
 
       const handleFileProcess = (uploadedFile) => {
+        // Check file size (warn if PDF > 2MB)
+        const sizeMB = uploadedFile.size / (1024 * 1024);
+        if (uploadedFile.type === 'application/pdf' && sizeMB > 2) {
+          showToast(`⚠️ Large PDF (${sizeMB.toFixed(1)}MB) may timeout. Consider using a screenshot!`, 'error');
+        }
+        
         setFile(uploadedFile);
         setError(null);
         setExtractedData(null);
@@ -704,6 +710,9 @@
                     <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileUpload} />
                   </label>
                   <p className={`text-sm mt-4 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>PDF, JPG, or PNG (max 10MB)</p>
+                  <p className={`text-xs mt-2 ${darkMode ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                    💡 Tip: Screenshots (PNG/JPG) process 5x faster than PDFs!
+                  </p>
                 </div>
 
                 {file && !loading && (
@@ -726,8 +735,18 @@
 
                 {error && (
                   <div className={`mt-6 p-4 rounded-lg border ${darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'}`}>
-                    <p className={`font-medium ${darkMode ? 'text-red-200' : 'text-red-800'}`}>❌ Error</p>
-                    <p className={darkMode ? 'text-red-300' : 'text-red-700'}>{error}</p>
+                    <p className={`font-medium mb-2 ${darkMode ? 'text-red-200' : 'text-red-800'}`}>❌ Error</p>
+                    <p className={`whitespace-pre-line ${darkMode ? 'text-red-300' : 'text-red-700'}`}>{error}</p>
+                    {error.includes('timeout') && (
+                      <div className={`mt-4 p-3 rounded border ${darkMode ? 'bg-yellow-900 border-yellow-700' : 'bg-yellow-50 border-yellow-300'}`}>
+                        <p className={`font-medium mb-2 ${darkMode ? 'text-yellow-200' : 'text-yellow-800'}`}>💡 Quick Fix:</p>
+                        <ol className={`list-decimal ml-5 space-y-1 text-sm ${darkMode ? 'text-yellow-300' : 'text-yellow-700'}`}>
+                          <li>Take a screenshot of the settlement letter</li>
+                          <li>Save as PNG or JPG</li>
+                          <li>Upload the screenshot instead</li>
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
