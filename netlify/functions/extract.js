@@ -18,7 +18,6 @@ exports.handler = async function(event, context) {
   }
 
   // 3. SECURE KEY RETRIEVAL
-  // We read the key from Netlify's environment variables
   const API_KEY = process.env.ANTHROPIC_API_KEY;
 
   if (!API_KEY) {
@@ -35,7 +34,7 @@ exports.handler = async function(event, context) {
   try {
     const payload = JSON.parse(event.body);
 
-    // 4. Call Anthropic with the Enhanced Prompt
+    // 4. Call Anthropic with the NEWEST Active Model
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -44,13 +43,14 @@ exports.handler = async function(event, context) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20240620',
+        // UPDATE: Using Claude Sonnet 4.5 (Active in Dec 2025)
+        model: 'claude-sonnet-4-5-20250929', 
         max_tokens: 4096,
         messages: [{
           role: 'user',
           content: [
             {
-              type: payload.messages[0].content[0].type, // 'image' or 'document'
+              type: payload.messages[0].content[0].type, 
               source: payload.messages[0].content[0].source
             },
             {
@@ -86,28 +86,19 @@ JSON STRUCTURE:
 *** STRICT EXTRACTION RULES ***
 
 1. "PAYABLE TO" vs "REMIT TO":
-   - These are DIFFERENT. Do not confuse them.
-   - checkPayableTo:
-     - ONLY extract a specific name if the text explicitly says "Make check payable to", "Pay to the order of", or "Money orders to".
-     - IF NO explicit instruction exists, default to the Name of the Creditor/Law Firm sending the letter.
-   - remittanceTo:
-     - This is the NAME of the entity receiving the mail.
-     - Default to the Law Firm/Agency on the letterhead unless the body explicitly says "Remit payment to [Different Name]".
-   - mailingAddress:
-     - This is the ADDRESS where the mail goes.
-     - Default to the Letterhead address unless the body explicitly says "Send payments to [Different Address]".
+   - checkPayableTo: ONLY extract if explicit ("Make check payable to"). Otherwise default to Creditor/Agency Name.
+   - remittanceTo: NAME of entity receiving mail. Default to Letterhead Agency unless body says otherwise.
+   - mailingAddress: ADDRESS for payment. Default to Letterhead Address unless body says otherwise.
 
 2. FEES & BALANCE:
-   - Extract the "Current Balance" or "Amount Due" (the large amount before the settlement discount).
-   - Look for specific line items for "Court Costs", "Attorney Fees", "Service Fees". List them specifically in the 'fees' field.
+   - Extract "Current Balance" (debt before settlement).
+   - List "Court Costs", "Attorney Fees" in 'fees'.
 
 3. SIGNATURE:
-   - Look for "Please sign and return", "Agreed to by:", "Defendant Signature:", or "Stipulation" lines.
-   - If the client must sign, set signatureRequired.data to "YES".
+   - If client/defendant must sign (e.g., "Stipulation", "Agreed to by"), set signatureRequired.data to "YES".
 
 4. GENERAL:
-   - If a specific field is not found, set data to "NOT FOUND" and confidence to "low".
-   - Do not hallucinate addresses.`
+   - If not found, set data to "NOT FOUND".`
             }
           ]
         }]
