@@ -8,6 +8,11 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    // Set PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -35,6 +40,80 @@
     }
     .dark .drag-active {
       background-color: #1e3a5f !important;
+    }
+    /* PDF Viewer Styles */
+    .pdf-container {
+      position: relative;
+      overflow: auto;
+      max-height: 600px;
+      background: #525659;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+    }
+    .pdf-page-wrapper {
+      position: relative;
+      margin: 10px 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      background: white;
+    }
+    .pdf-canvas {
+      display: block;
+    }
+    .text-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 0.3;
+      line-height: 1.0;
+      pointer-events: none;
+    }
+    .text-layer > span {
+      color: transparent;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+      pointer-events: auto;
+    }
+    .text-layer .highlight {
+      background-color: #FFFF00 !important;
+      color: transparent !important;
+      opacity: 1;
+      border-radius: 2px;
+      padding: 2px 0;
+      box-decoration-break: clone;
+    }
+    .text-layer .highlight.active {
+      background-color: #FFA500 !important;
+      box-shadow: 0 0 10px 3px rgba(255, 165, 0, 0.9);
+    }
+    .pdf-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px;
+      background: rgba(0,0,0,0.1);
+      border-radius: 8px 8px 0 0;
+    }
+    .pdf-controls button {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .pdf-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #666;
     }
   </style>
 </head>
@@ -934,6 +1013,1617 @@
       );
     }
 
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<SettlementExtractorPro />);
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Professional debt settlement letter analyzer with AI-powered data extraction">
+  <meta name="theme-color" content="#2563eb">
+  <title>Settlement Payment Extractor Pro</title>
+  
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  
+  <!-- React & Dependencies -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          animation: {
+            'fade-in': 'fadeIn 0.2s ease-out',
+            'slide-in': 'slideIn 0.3s ease-out',
+            'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideIn {
+      from { transform: translateY(-10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin { animation: spin 1s linear infinite; }
+    .drag-active {
+      border-color: #3b82f6 !important;
+      background-color: #eff6ff !important;
+      transform: scale(1.01);
+    }
+    .dark .drag-active {
+      background-color: #1e3a5f !important;
+    }
+    /* Smooth scrolling */
+    html { scroll-behavior: smooth; }
+    /* Better focus states */
+    *:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #666; }
+    .dark ::-webkit-scrollbar-thumb { background: #555; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #777; }
+  </style>
+</head>
+
+<body class="antialiased">
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    // ==================== CONSTANTS ====================
+    const FIELD_LABELS = {
+      paymentBreakdown: 'Payment Breakdown',
+      firstPaymentDate: 'First Payment Date',
+      currentBalance: 'Current Balance (Total)',
+      fees: 'Fees (Court/Attorney)',
+      signatureRequired: 'Client Signature Required',
+      remittanceTo: 'Remit Payment To (Entity)',
+      mailingAddress: 'Mailing Address',
+      checkPayableTo: 'Make Check Payable To',
+      clientName: 'Client Name',
+      referenceNumber: 'Reference/Account Number',
+      additionalInstructions: 'Additional Instructions'
+    };
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const PDF_WARNING_SIZE = 2 * 1024 * 1024; // 2MB
+    const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    // ==================== ENCRYPTION UTILITIES ====================
+    const CryptoUtils = {
+      async getStoredKey() {
+        try {
+          const storedKey = localStorage.getItem('encryptionKey');
+          if (storedKey) {
+            const keyData = JSON.parse(storedKey);
+            return await window.crypto.subtle.importKey(
+              'jwk', keyData,
+              { name: 'AES-GCM', length: 256 },
+              true, ['encrypt', 'decrypt']
+            );
+          }
+          const newKey = await window.crypto.subtle.generateKey(
+            { name: 'AES-GCM', length: 256 },
+            true, ['encrypt', 'decrypt']
+          );
+          const exportedKey = await window.crypto.subtle.exportKey('jwk', newKey);
+          localStorage.setItem('encryptionKey', JSON.stringify(exportedKey));
+          return newKey;
+        } catch (error) {
+          console.error('Key generation error:', error);
+          return null;
+        }
+      },
+
+      async encrypt(data) {
+        try {
+          const key = await this.getStoredKey();
+          if (!key) return null;
+          
+          const encoder = new TextEncoder();
+          const dataBuffer = encoder.encode(JSON.stringify(data));
+          const iv = window.crypto.getRandomValues(new Uint8Array(12));
+          const encryptedBuffer = await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv }, key, dataBuffer
+          );
+          const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+          combined.set(iv);
+          combined.set(new Uint8Array(encryptedBuffer), iv.length);
+          return btoa(String.fromCharCode(...combined));
+        } catch (error) {
+          console.error('Encryption error:', error);
+          return null;
+        }
+      },
+
+      async decrypt(encryptedData) {
+        try {
+          const key = await this.getStoredKey();
+          if (!key) return null;
+          
+          const combined = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
+          const iv = combined.slice(0, 12);
+          const data = combined.slice(12);
+          const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv }, key, data
+          );
+          return JSON.parse(new TextDecoder().decode(decryptedBuffer));
+        } catch (error) {
+          console.error('Decryption error:', error);
+          return null;
+        }
+      }
+    };
+
+    // ==================== ICONS ====================
+    const Icons = {
+      Sun: () => (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+      Moon: () => (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      ),
+      Upload: () => (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+      ),
+      Check: () => (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ),
+      X: () => (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ),
+      Copy: () => (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      ),
+      Location: () => (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      )
+    };
+
+    // ==================== TOAST COMPONENT ====================
+    function Toast({ message, type, onClose }) {
+      useEffect(() => {
+        const timer = setTimeout(onClose, 4000);
+        return () => clearTimeout(timer);
+      }, [onClose]);
+
+      const config = {
+        success: { bg: 'bg-green-600', icon: <Icons.Check /> },
+        error: { bg: 'bg-red-600', icon: <Icons.X /> },
+        info: { bg: 'bg-blue-600', icon: '📋' }
+      }[type] || { bg: 'bg-gray-600', icon: 'ℹ️' };
+
+      return (
+        <div 
+          role="alert"
+          className={`fixed top-4 right-4 z-50 animate-slide-in ${config.bg} text-white px-5 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm`}
+        >
+          <span className="flex-shrink-0">{config.icon}</span>
+          <span className="font-medium text-sm">{message}</span>
+          <button 
+            onClick={onClose}
+            className="ml-2 hover:opacity-80 transition-opacity"
+            aria-label="Dismiss"
+          >
+            <Icons.X />
+          </button>
+        </div>
+      );
+    }
+
+    // ==================== PDF VIEWER WITH HIGHLIGHTING ====================
+    function PDFViewer({ fileData, highlightText, isDark }) {
+      const containerRef = useRef(null);
+      const [pdfDoc, setPdfDoc] = useState(null);
+      const [totalPages, setTotalPages] = useState(0);
+      const [scale, setScale] = useState(1.2);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [renderedPages, setRenderedPages] = useState([]);
+
+      // Load PDF document
+      useEffect(() => {
+        if (!fileData) return;
+        
+        setLoading(true);
+        setError(null);
+        
+        const loadPDF = async () => {
+          try {
+            // Convert base64 to array buffer
+            const base64 = fileData.split(',')[1];
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+            setPdfDoc(pdf);
+            setTotalPages(pdf.numPages);
+            setLoading(false);
+          } catch (err) {
+            console.error('PDF load error:', err);
+            setError('Failed to load PDF');
+            setLoading(false);
+          }
+        };
+        
+        loadPDF();
+      }, [fileData]);
+
+      // Render pages when PDF is loaded or scale changes
+      useEffect(() => {
+        if (!pdfDoc || !containerRef.current) return;
+        
+        const renderAllPages = async () => {
+          const pagesContainer = containerRef.current;
+          pagesContainer.innerHTML = '';
+          const newRenderedPages = [];
+          
+          for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale });
+            
+            // Create page wrapper
+            const pageWrapper = document.createElement('div');
+            pageWrapper.className = 'pdf-page-wrapper';
+            pageWrapper.style.width = `${viewport.width}px`;
+            pageWrapper.style.height = `${viewport.height}px`;
+            pageWrapper.setAttribute('data-page', pageNum);
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            canvas.className = 'pdf-canvas';
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            // Create text layer
+            const textLayer = document.createElement('div');
+            textLayer.className = 'text-layer';
+            textLayer.style.width = `${viewport.width}px`;
+            textLayer.style.height = `${viewport.height}px`;
+            
+            pageWrapper.appendChild(canvas);
+            pageWrapper.appendChild(textLayer);
+            pagesContainer.appendChild(pageWrapper);
+            
+            // Render canvas
+            const context = canvas.getContext('2d');
+            await page.render({
+              canvasContext: context,
+              viewport: viewport
+            }).promise;
+            
+            // Render text layer
+            const textContent = await page.getTextContent();
+            
+            textContent.items.forEach((item) => {
+              const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+              const span = document.createElement('span');
+              span.textContent = item.str;
+              span.style.left = `${tx[4]}px`;
+              span.style.top = `${tx[5] - item.height}px`;
+              span.style.fontSize = `${Math.abs(tx[0])}px`;
+              span.style.fontFamily = item.fontName || 'sans-serif';
+              span.setAttribute('data-text', item.str.toLowerCase());
+              textLayer.appendChild(span);
+            });
+            
+            newRenderedPages.push({
+              pageNum,
+              textLayer,
+              items: textContent.items
+            });
+          }
+          
+          setRenderedPages(newRenderedPages);
+        };
+        
+        renderAllPages();
+      }, [pdfDoc, scale, totalPages]);
+
+      // Highlight text when highlightText changes
+      useEffect(() => {
+        if (!renderedPages.length || !highlightText) {
+          // Clear all highlights
+          renderedPages.forEach(({ textLayer }) => {
+            if (textLayer) {
+              textLayer.querySelectorAll('.highlight').forEach(el => {
+                el.classList.remove('highlight', 'active');
+              });
+            }
+          });
+          return;
+        }
+        
+        // Clear previous highlights
+        renderedPages.forEach(({ textLayer }) => {
+          if (textLayer) {
+            textLayer.querySelectorAll('.highlight').forEach(el => {
+              el.classList.remove('highlight', 'active');
+            });
+          }
+        });
+        
+        // Extract meaningful phrases (4+ chars) and filter out common words
+        const commonWords = new Set(['the', 'and', 'for', 'that', 'with', 'this', 'from', 'your', 'have', 'will', 'been', 'were', 'they', 'their', 'what', 'when', 'where', 'which', 'there', 'make', 'made', 'each', 'shall', 'upon', 'into', 'said', 'such']);
+        
+        const cleanedText = highlightText.toLowerCase()
+          .replace(/["""'']/g, '') // Remove quotes
+          .replace(/[^\w\s$.,%-]/g, ' ');
+        
+        // Get significant words (longer words, numbers, dollar amounts)
+        const significantTerms = cleanedText
+          .split(/\s+/)
+          .filter(t => {
+            if (t.length < 4) return false;
+            if (commonWords.has(t)) return false;
+            // Keep numbers, dollar amounts, dates
+            if (/\d/.test(t)) return true;
+            // Keep longer words
+            if (t.length >= 5) return true;
+            return false;
+          });
+        
+        // Also try to find consecutive word sequences
+        const words = cleanedText.split(/\s+/).filter(w => w.length > 0);
+        const phraseLength = Math.min(4, words.length);
+        const phrases = [];
+        for (let i = 0; i <= words.length - phraseLength; i++) {
+          phrases.push(words.slice(i, i + phraseLength).join(' '));
+        }
+        
+        let firstMatch = null;
+        let matchCount = 0;
+        const maxHighlights = 20; // Limit highlights to prevent over-highlighting
+        
+        renderedPages.forEach(({ textLayer }) => {
+          if (!textLayer || matchCount >= maxHighlights) return;
+          
+          const spans = textLayer.querySelectorAll('span');
+          const spanTexts = Array.from(spans).map(s => ({
+            span: s,
+            text: (s.getAttribute('data-text') || s.textContent).toLowerCase()
+          }));
+          
+          // Build continuous text from spans for phrase matching
+          let continuousText = '';
+          const spanPositions = [];
+          spanTexts.forEach(({ span, text }, idx) => {
+            spanPositions.push({ start: continuousText.length, end: continuousText.length + text.length, span, idx });
+            continuousText += text + ' ';
+          });
+          
+          // Try phrase matching first
+          let foundPhrase = false;
+          for (const phrase of phrases) {
+            const phraseIdx = continuousText.indexOf(phrase);
+            if (phraseIdx !== -1) {
+              // Find spans that overlap with this phrase
+              spanPositions.forEach(({ start, end, span }) => {
+                if (start < phraseIdx + phrase.length && end > phraseIdx) {
+                  if (matchCount < maxHighlights) {
+                    span.classList.add('highlight');
+                    matchCount++;
+                    if (!firstMatch) {
+                      firstMatch = span;
+                      span.classList.add('active');
+                    }
+                    foundPhrase = true;
+                  }
+                }
+              });
+              if (foundPhrase) break;
+            }
+          }
+          
+          // If no phrase found, fall back to significant term matching
+          if (!foundPhrase && significantTerms.length > 0) {
+            spanTexts.forEach(({ span, text }) => {
+              if (matchCount >= maxHighlights) return;
+              
+              // Check if span contains any significant term
+              const hasSignificantMatch = significantTerms.some(term => {
+                // For numbers/amounts, require exact or near-exact match
+                if (/\d/.test(term)) {
+                  return text.includes(term);
+                }
+                // For words, require the term to be substantial part of the span
+                return text.includes(term) && term.length >= text.length * 0.5;
+              });
+              
+              if (hasSignificantMatch) {
+                span.classList.add('highlight');
+                matchCount++;
+                if (!firstMatch) {
+                  firstMatch = span;
+                  span.classList.add('active');
+                }
+              }
+            });
+          }
+        });
+        
+        // Scroll to first match
+        if (firstMatch && containerRef.current) {
+          setTimeout(() => {
+            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      }, [highlightText, renderedPages]);
+
+      const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3));
+      const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.5));
+
+      if (loading) {
+        return (
+          <div className="pdf-loading">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
+            <p>Loading PDF...</p>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className={`p-8 text-center ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+            <p>❌ {error}</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="pdf-viewer">
+          <div className={`pdf-controls ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
+            <button
+              onClick={handleZoomOut}
+              className={`${isDark ? 'bg-gray-600 text-white hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              ➖
+            </button>
+            <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              onClick={handleZoomIn}
+              className={`${isDark ? 'bg-gray-600 text-white hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              ➕
+            </button>
+            <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              | {totalPages} page{totalPages > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div 
+            ref={containerRef} 
+            className="pdf-container"
+          />
+        </div>
+      );
+    }
+
+    // ==================== CONFIRMATION MODAL ====================
+    function ConfirmModal({ isOpen, title, message, onConfirm, onCancel, isDark }) {
+      const cancelRef = useRef(null);
+      
+      useEffect(() => {
+        if (isOpen && cancelRef.current) {
+          cancelRef.current.focus();
+        }
+      }, [isOpen]);
+
+      if (!isOpen) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+          <div className={`relative z-10 p-6 rounded-xl shadow-2xl max-w-md w-full animate-fade-in ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+            <h3 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
+            <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{message}</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                ref={cancelRef}
+                onClick={onCancel}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== LOADING SPINNER ====================
+    function LoadingSpinner({ size = 'md', message }) {
+      const sizeClasses = { sm: 'h-6 w-6', md: 'h-10 w-10', lg: 'h-14 w-14' };
+      
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <div className={`animate-spin rounded-full border-b-2 border-blue-600 ${sizeClasses[size]}`} />
+          {message && <p className="mt-4 text-gray-500 dark:text-gray-400">{message}</p>}
+        </div>
+      );
+    }
+
+    // ==================== DATA FIELD CARD ====================
+    function DataFieldCard({ 
+      fieldKey, 
+      value, 
+      label, 
+      isHighlighted, 
+      isVerified, 
+      userNote, 
+      onToggleVerification, 
+      onUpdateNote, 
+      onCopy, 
+      onHighlight,
+      isDark 
+    }) {
+      const confidenceColors = {
+        high: isDark ? 'border-green-600 bg-green-900/30' : 'border-green-400 bg-green-50',
+        medium: isDark ? 'border-yellow-600 bg-yellow-900/30' : 'border-yellow-400 bg-yellow-50',
+        low: isDark ? 'border-red-600 bg-red-900/30' : 'border-red-400 bg-red-50'
+      };
+
+      const badgeColors = {
+        high: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+        medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+        low: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      };
+
+      return (
+        <div 
+          className={`border-2 rounded-xl p-4 transition-all ${confidenceColors[value.confidence]} ${
+            isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900' : ''
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between mb-3 gap-2">
+            <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              {label}
+            </h3>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {value.location && (
+                <button
+                  onClick={() => onHighlight(fieldKey)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    isHighlighted 
+                      ? 'bg-blue-600 text-white' 
+                      : isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                  title="Show location in document"
+                  aria-label="Show location"
+                >
+                  <Icons.Location />
+                </button>
+              )}
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badgeColors[value.confidence]}`}>
+                {value.confidence.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          {/* Data Value */}
+          <div className="mb-3">
+            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Value</p>
+            <p className={`p-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200'}`}>
+              {value.data}
+            </p>
+          </div>
+
+          {/* Source Quote */}
+          <div className="mb-3">
+            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Source</p>
+            <p className={`text-sm p-3 rounded-lg border italic ${isDark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+              "{value.source}"
+            </p>
+          </div>
+
+          {/* Location */}
+          {value.location && (
+            <div className="mb-3">
+              <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Location</p>
+              <p className={`text-sm p-2 rounded-lg ${isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
+                📍 {value.location}
+              </p>
+            </div>
+          )}
+
+          {/* AI Notes */}
+          {value.notes && (
+            <div className="mb-3">
+              <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>AI Notes</p>
+              <p className={`text-sm p-2 rounded-lg ${isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-50 text-gray-600'}`}>
+                🤖 {value.notes}
+              </p>
+            </div>
+          )}
+
+          {/* User Notes */}
+          <div className="mb-3">
+            <label className={`text-xs font-medium mb-1 block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Your Notes
+            </label>
+            <textarea
+              value={userNote || ''}
+              onChange={(e) => onUpdateNote(fieldKey, e.target.value)}
+              placeholder="Add your notes..."
+              className={`w-full p-2.5 border rounded-lg text-sm resize-none transition-colors ${
+                isDark 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500' 
+                  : 'bg-white border-gray-200 focus:border-blue-500'
+              }`}
+              rows="2"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isVerified}
+                onChange={() => onToggleVerification(fieldKey)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Verified
+              </span>
+            </label>
+            <button 
+              onClick={() => onCopy(value.data, label)}
+              className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+            >
+              <Icons.Copy />
+              Copy
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== MAIN APPLICATION ====================
+    function SettlementExtractorPro() {
+      // State
+      const [file, setFile] = useState(null);
+      const [filePreview, setFilePreview] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [extractedData, setExtractedData] = useState(null);
+      const [verifications, setVerifications] = useState({});
+      const [error, setError] = useState(null);
+      const [userNotes, setUserNotes] = useState({});
+      const [savedRecords, setSavedRecords] = useState([]);
+      const [currentView, setCurrentView] = useState('upload');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [compareItems, setCompareItems] = useState([]);
+      const [validationErrors, setValidationErrors] = useState([]);
+      const [currentRecordId, setCurrentRecordId] = useState(null);
+      const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+      const [toast, setToast] = useState(null);
+      const [isDragging, setIsDragging] = useState(false);
+      const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null });
+      const [highlightedField, setHighlightedField] = useState(null);
+      const [pdfHighlightText, setPdfHighlightText] = useState(null);
+      const [retryCount, setRetryCount] = useState(0);
+
+      const fileInputRef = useRef(null);
+
+      // Effects
+      useEffect(() => {
+        document.documentElement.classList.toggle('dark', darkMode);
+        localStorage.setItem('darkMode', darkMode);
+      }, [darkMode]);
+
+      useEffect(() => {
+        const loadRecords = async () => {
+          try {
+            const encrypted = localStorage.getItem('encryptedRecords');
+            if (encrypted) {
+              const decrypted = await CryptoUtils.decrypt(encrypted);
+              if (decrypted) setSavedRecords(decrypted);
+            }
+          } catch (error) {
+            console.error('Failed to load records:', error);
+          }
+        };
+        loadRecords();
+      }, []);
+
+      useEffect(() => {
+        const saveRecords = async () => {
+          try {
+            if (savedRecords.length > 0) {
+              const encrypted = await CryptoUtils.encrypt(savedRecords);
+              if (encrypted) localStorage.setItem('encryptedRecords', encrypted);
+            } else {
+              localStorage.removeItem('encryptedRecords');
+            }
+          } catch (error) {
+            console.error('Failed to save records:', error);
+          }
+        };
+        saveRecords();
+      }, [savedRecords]);
+
+      // Computed values
+      const allVerified = useMemo(() => 
+        extractedData && Object.keys(verifications).every(key => verifications[key]),
+        [extractedData, verifications]
+      );
+
+      const hasLowConfidence = useMemo(() => 
+        extractedData && Object.values(extractedData).some(item => item.confidence === 'low'),
+        [extractedData]
+      );
+
+      const criticalErrors = useMemo(() => 
+        validationErrors.filter(e => e.severity === 'critical'),
+        [validationErrors]
+      );
+
+      const highErrors = useMemo(() => 
+        validationErrors.filter(e => e.severity === 'high'),
+        [validationErrors]
+      );
+
+      const filteredRecords = useMemo(() => {
+        const search = searchTerm.toLowerCase();
+        return savedRecords.filter(record => 
+          record.fileName.toLowerCase().includes(search) ||
+          record.extractedData.clientName?.data?.toLowerCase().includes(search) ||
+          record.extractedData.checkPayableTo?.data?.toLowerCase().includes(search)
+        );
+      }, [savedRecords, searchTerm]);
+
+      // Handlers
+      const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type });
+      }, []);
+
+      const copyToClipboard = useCallback(async (text, fieldName = 'Data') => {
+        try {
+          await navigator.clipboard.writeText(text);
+          showToast(`${fieldName} copied!`, 'success');
+        } catch {
+          showToast('Failed to copy', 'error');
+        }
+      }, [showToast]);
+
+      const validateFile = useCallback((uploadedFile) => {
+        if (!uploadedFile) return { valid: false, error: 'No file selected' };
+        
+        if (!ACCEPTED_TYPES.includes(uploadedFile.type)) {
+          return { valid: false, error: 'Invalid file type. Please upload a PDF, JPG, or PNG.' };
+        }
+        
+        if (uploadedFile.size > MAX_FILE_SIZE) {
+          return { valid: false, error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.` };
+        }
+        
+        return { valid: true };
+      }, []);
+
+      const handleFileProcess = useCallback((uploadedFile) => {
+        const validation = validateFile(uploadedFile);
+        if (!validation.valid) {
+          showToast(validation.error, 'error');
+          return;
+        }
+
+        // Warning for large PDFs
+        if (uploadedFile.type === 'application/pdf' && uploadedFile.size > PDF_WARNING_SIZE) {
+          showToast(`Large PDF (${(uploadedFile.size / (1024 * 1024)).toFixed(1)}MB) may be slow. Consider a screenshot!`, 'info');
+        }
+        
+        setFile(uploadedFile);
+        setError(null);
+        setExtractedData(null);
+        setVerifications({});
+        setUserNotes({});
+        setValidationErrors([]);
+        setCurrentRecordId(null);
+        setHighlightedField(null);
+        setRetryCount(0);
+
+        const reader = new FileReader();
+        reader.onload = (e) => setFilePreview(e.target.result);
+        reader.onerror = () => showToast('Failed to read file', 'error');
+        reader.readAsDataURL(uploadedFile);
+        
+        showToast(`File loaded: ${uploadedFile.name}`, 'success');
+      }, [validateFile, showToast]);
+
+      const handleDragEnter = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+      }, []);
+
+      const handleDragLeave = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+      }, []);
+
+      const handleDragOver = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, []);
+
+      const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const droppedFile = e.dataTransfer.files?.[0];
+        if (droppedFile) handleFileProcess(droppedFile);
+      }, [handleFileProcess]);
+
+      const handleFileUpload = useCallback((e) => {
+        const uploadedFile = e.target.files?.[0];
+        if (uploadedFile) handleFileProcess(uploadedFile);
+      }, [handleFileProcess]);
+
+      const validateExtractedData = useCallback((data) => {
+        const errors = [];
+
+        if (data.paymentBreakdown?.data === 'NOT FOUND') {
+          errors.push({ field: 'Payment Breakdown', message: 'CRITICAL: Payment breakdown missing', severity: 'critical' });
+        }
+        if (data.firstPaymentDate?.data === 'NOT FOUND') {
+          errors.push({ field: 'First Payment Date', message: 'WARNING: First payment date not found', severity: 'high' });
+        }
+        if (data.mailingAddress?.data === 'NOT FOUND') {
+          errors.push({ field: 'Mailing Address', message: 'CRITICAL: Mailing address missing', severity: 'critical' });
+        }
+        
+        const address = data.mailingAddress?.data;
+        if (address && address !== 'NOT FOUND' && !address.match(/\d{5}(-\d{4})?/)) {
+          errors.push({ field: 'Mailing Address', message: 'Address may be missing ZIP code', severity: 'medium' });
+        }
+        
+        if (data.signatureRequired?.data?.toUpperCase() === 'YES') {
+          errors.push({ field: 'Signature Required', message: 'INFO: Client signature required', severity: 'high' });
+        }
+
+        return errors;
+      }, []);
+
+      const processDocument = useCallback(async (isRetry = false) => {
+        if (!file) return;
+
+        setLoading(true);
+        setError(null);
+
+        try {
+          const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+
+          const mediaType = file.type === 'application/pdf' ? 'application/pdf' : 
+                            file.type.startsWith('image/') ? file.type : 'image/jpeg';
+          const contentType = file.type === 'application/pdf' ? 'document' : 'image';
+
+          const response = await fetch('/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{
+                role: 'user',
+                content: [{
+                  type: contentType,
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType,
+                    data: base64Data
+                  }
+                }]
+              }]
+            })
+          });
+
+          const responseData = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(responseData.error || `Server error: ${response.status}`);
+          }
+
+          const text = responseData.content?.map(item => item.type === 'text' ? item.text : '').join('\n') || '';
+          const cleaned = text.replace(/```json|```/g, '').trim();
+          
+          let parsed;
+          try {
+            parsed = JSON.parse(cleaned);
+          } catch (parseError) {
+            throw new Error('Failed to parse AI response. Please try again.');
+          }
+
+          setExtractedData(parsed);
+          
+          const initialVerifications = {};
+          Object.keys(parsed).forEach(key => { initialVerifications[key] = false; });
+          setVerifications(initialVerifications);
+
+          const errors = validateExtractedData(parsed);
+          setValidationErrors(errors);
+          setRetryCount(0);
+          
+          showToast('Document processed successfully!', 'success');
+
+        } catch (err) {
+          console.error('Extraction error:', err);
+          setError(err.message || 'Failed to process document');
+          
+          // Auto-retry logic for timeout errors
+          if (err.message?.includes('timeout') && retryCount < 1 && !isRetry) {
+            setRetryCount(prev => prev + 1);
+            showToast('Retrying with optimized settings...', 'info');
+            setTimeout(() => processDocument(true), 1000);
+            return;
+          }
+          
+          showToast('Processing failed', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }, [file, retryCount, validateExtractedData, showToast]);
+
+      const saveRecord = useCallback(async () => {
+        if (!extractedData || !file) return;
+
+        const recordId = currentRecordId || `record_${Date.now()}`;
+        const record = {
+          id: recordId,
+          timestamp: new Date().toISOString(),
+          fileName: file.name,
+          extractedData,
+          verifications,
+          userNotes,
+          validationErrors
+        };
+
+        setSavedRecords(prev => [record, ...prev.filter(r => r.id !== recordId)]);
+        setCurrentRecordId(recordId);
+        showToast('Record saved!', 'success');
+      }, [extractedData, file, currentRecordId, verifications, userNotes, validationErrors, showToast]);
+
+      const loadRecord = useCallback((recordId) => {
+        const record = savedRecords.find(r => r.id === recordId);
+        if (record) {
+          setExtractedData(record.extractedData);
+          setVerifications(record.verifications);
+          setUserNotes(record.userNotes || {});
+          setValidationErrors(record.validationErrors || []);
+          setFilePreview(null);
+          setFile({ name: record.fileName, type: 'unknown' });
+          setCurrentRecordId(recordId);
+          setCurrentView('upload');
+          showToast('Record loaded', 'info');
+        }
+      }, [savedRecords, showToast]);
+
+      const deleteRecord = useCallback((recordId) => {
+        setConfirmModal({
+          isOpen: true,
+          title: 'Delete Record?',
+          message: 'This action cannot be undone.',
+          action: () => {
+            setSavedRecords(prev => prev.filter(r => r.id !== recordId));
+            showToast('Record deleted', 'success');
+            setConfirmModal({ isOpen: false, action: null });
+          }
+        });
+      }, [showToast]);
+
+      const clearAllData = useCallback(() => {
+        setConfirmModal({
+          isOpen: true,
+          title: 'Clear Current Data?',
+          message: 'This will clear the current document. Saved records are not affected.',
+          action: () => {
+            setExtractedData(null);
+            setFile(null);
+            setFilePreview(null);
+            setVerifications({});
+            setUserNotes({});
+            setValidationErrors([]);
+            setCurrentRecordId(null);
+            setHighlightedField(null);
+            setError(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            showToast('Data cleared', 'success');
+            setConfirmModal({ isOpen: false, action: null });
+          }
+        });
+      }, [showToast]);
+
+      const exportToCSV = useCallback(() => {
+        if (!extractedData) return;
+
+        const headers = ['Field', 'Value', 'Confidence', 'Source', 'AI Notes', 'User Notes', 'Verified'];
+        const rows = Object.entries(extractedData).map(([key, value]) => [
+          FIELD_LABELS[key] || key,
+          value.data,
+          value.confidence,
+          value.source,
+          value.notes || '',
+          userNotes[key] || '',
+          verifications[key] ? 'Yes' : 'No'
+        ]);
+
+        const csv = [headers, ...rows]
+          .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `settlement-${file?.name?.replace(/\.[^/.]+$/, '') || 'export'}-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        showToast('CSV exported!', 'success');
+      }, [extractedData, userNotes, verifications, file, showToast]);
+
+      const copyAllData = useCallback(() => {
+        if (!extractedData) return;
+        const text = Object.entries(extractedData)
+          .map(([key, value]) => `${FIELD_LABELS[key] || key}: ${value.data}`)
+          .join('\n\n');
+        copyToClipboard(text, 'All data');
+      }, [extractedData, copyToClipboard]);
+
+      const addToCompare = useCallback(() => {
+        if (!extractedData || !file) return;
+        if (compareItems.length >= 3) {
+          showToast('Maximum 3 items for comparison', 'error');
+          return;
+        }
+        setCompareItems(prev => [...prev, {
+          id: Date.now(),
+          fileName: file.name,
+          data: extractedData
+        }]);
+        showToast('Added to comparison!', 'success');
+      }, [extractedData, file, compareItems.length, showToast]);
+
+      // Render
+      return (
+        <div className={`min-h-screen transition-colors duration-200 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+          <ConfirmModal 
+            {...confirmModal} 
+            onConfirm={confirmModal.action}
+            onCancel={() => setConfirmModal({ isOpen: false, action: null })} 
+            isDark={darkMode} 
+          />
+
+          {/* Header */}
+          <header className={`sticky top-0 z-40 border-b shadow-sm backdrop-blur-sm ${darkMode ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-200'}`}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <h1 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Settlement Extractor Pro
+                  </h1>
+                  <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-medium dark:bg-green-900 dark:text-green-200 flex items-center gap-1">
+                    🔒 Encrypted
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className={`p-2 rounded-lg transition-colors ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-yellow-400' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
+                    aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                  >
+                    {darkMode ? <Icons.Sun /> : <Icons.Moon />}
+                  </button>
+                  
+                  {['upload', 'history', 'compare'].map(view => (
+                    <button
+                      key={view}
+                      onClick={() => setCurrentView(view)}
+                      className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
+                        currentView === view 
+                          ? 'bg-blue-600 text-white' 
+                          : darkMode 
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {view === 'upload' ? '📄 New' : view === 'history' ? `📁 History (${savedRecords.length})` : `⚖️ Compare (${compareItems.length})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto p-4 sm:p-6">
+            
+            {/* History View */}
+            {currentView === 'history' && (
+              <div className={`rounded-xl shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Saved Records</h2>
+                  <input
+                    type="text"
+                    placeholder="Search by name or creditor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`px-4 py-2 border rounded-lg w-full sm:w-80 transition-colors ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
+                        : 'bg-white border-gray-300 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+
+                {filteredRecords.length === 0 ? (
+                  <div className={`text-center py-16 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className="text-5xl mb-4">📁</p>
+                    <p className="text-lg">No records found</p>
+                    <p className="text-sm mt-2">Process a document to save your first record</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredRecords.map(record => (
+                      <div 
+                        key={record.id} 
+                        className={`border rounded-xl p-4 transition-colors ${
+                          darkMode ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between flex-wrap gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                              <span className={`font-medium truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                {record.fileName}
+                              </span>
+                              <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {new Date(record.timestamp).toLocaleDateString()} {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Client: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.clientName?.data || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Creditor: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.checkPayableTo?.data || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Due: </span>
+                                <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  {record.extractedData.firstPaymentDate?.data || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => loadRecord(record.id)} 
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+                            >
+                              Load
+                            </button>
+                            <button 
+                              onClick={() => deleteRecord(record.id)} 
+                              className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Compare View */}
+            {currentView === 'compare' && (
+              <div className={`rounded-xl shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Compare Settlements</h2>
+                
+                {compareItems.length === 0 ? (
+                  <div className={`text-center py-16 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className="text-5xl mb-4">⚖️</p>
+                    <p className="text-lg">No items to compare</p>
+                    <p className="text-sm mt-2">Add documents from the extraction view</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {compareItems.map(item => (
+                      <div key={item.id} className={`border rounded-xl p-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className={`font-bold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>{item.fileName}</h3>
+                          <button 
+                            onClick={() => setCompareItems(prev => prev.filter(i => i.id !== item.id))} 
+                            className="text-red-500 hover:text-red-600 p-1"
+                            aria-label="Remove from comparison"
+                          >
+                            <Icons.X />
+                          </button>
+                        </div>
+                        <div className="space-y-3 text-sm max-h-96 overflow-y-auto">
+                          {Object.entries(item.data).map(([key, value]) => (
+                            <div key={key}>
+                              <span className={`block text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {FIELD_LABELS[key] || key}
+                              </span>
+                              <span className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                                {value.data}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload View - No Data */}
+            {currentView === 'upload' && !extractedData && (
+              <div className={`rounded-xl shadow-sm p-6 sm:p-8 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div 
+                  className={`border-2 border-dashed rounded-xl p-8 sm:p-12 text-center transition-all cursor-pointer ${
+                    isDragging 
+                      ? 'drag-active border-blue-500' 
+                      : darkMode 
+                        ? 'border-gray-600 hover:border-blue-400' 
+                        : 'border-gray-300 hover:border-blue-400'
+                  }`}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+                  aria-label="Upload file"
+                >
+                  <div className={`mx-auto mb-4 ${isDragging ? 'text-blue-500' : darkMode ? 'text-gray-400' : 'text-gray-400'}`}>
+                    <Icons.Upload />
+                  </div>
+                  <div>
+                    <span className="text-blue-600 hover:text-blue-700 font-semibold text-lg">Click to upload</span>
+                    <span className={`text-lg ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}> or drag and drop</span>
+                  </div>
+                  <p className={`text-sm mt-3 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    PDF, JPG, PNG, or WebP (max 10MB)
+                  </p>
+                  <p className={`text-xs mt-2 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                    💡 Pro tip: Screenshots process 5x faster than PDFs!
+                  </p>
+                  <input 
+                    ref={fileInputRef}
+                    type="file" 
+                    className="hidden" 
+                    accept=".pdf,.jpg,.jpeg,.png,.webp" 
+                    onChange={handleFileUpload} 
+                  />
+                </div>
+
+                {/* File Selected */}
+                {file && !loading && (
+                  <div className="mt-6">
+                    <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                      darkMode ? 'bg-blue-900/30 border-blue-700' : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <span className={`font-medium truncate ${darkMode ? 'text-blue-200' : 'text-gray-900'}`}>
+                        📎 {file.name}
+                      </span>
+                      <button 
+                        onClick={() => processDocument()} 
+                        className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
+                      >
+                        🚀 Process Document
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading State */}
+                {loading && (
+                  <div className="mt-8">
+                    <LoadingSpinner size="lg" message="Analyzing document with AI..." />
+                    <p className={`text-center text-sm mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                      This may take up to 30 seconds for large documents
+                    </p>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {error && (
+                  <div className={`mt-6 p-4 rounded-xl border ${darkMode ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200'}`}>
+                    <p className={`font-semibold mb-2 ${darkMode ? 'text-red-200' : 'text-red-800'}`}>❌ Error</p>
+                    <p className={`whitespace-pre-line ${darkMode ? 'text-red-300' : 'text-red-700'}`}>{error}</p>
+                    
+                    {error.toLowerCase().includes('timeout') && (
+                      <div className={`mt-4 p-3 rounded-lg border ${darkMode ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 border-amber-300'}`}>
+                        <p className={`font-semibold mb-2 ${darkMode ? 'text-amber-200' : 'text-amber-800'}`}>💡 Quick Fix</p>
+                        <ol className={`list-decimal ml-5 space-y-1 text-sm ${darkMode ? 'text-amber-300' : 'text-amber-700'}`}>
+                          <li>Take a screenshot of the settlement letter</li>
+                          <li>Save as PNG or JPG</li>
+                          <li>Upload the screenshot instead</li>
+                        </ol>
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={() => processDocument()}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                    >
+                      🔄 Retry
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload View - With Data */}
+            {currentView === 'upload' && extractedData && (
+              <div className="space-y-6">
+                {/* Action Bar */}
+                <div className={`rounded-xl shadow-sm p-4 flex items-center justify-between flex-wrap gap-3 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={saveRecord} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors">
+                      💾 Save
+                    </button>
+                    <button onClick={exportToCSV} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors">
+                      📥 Export CSV
+                    </button>
+                    <button onClick={copyAllData} className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}>
+                      📋 Copy All
+                    </button>
+                    {compareItems.length < 3 && (
+                      <button onClick={addToCompare} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-colors">
+                        ⚖️ Add to Compare
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={clearAllData} className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}>
+                    🔄 New Document
+                  </button>
+                </div>
+
+                {/* Validation Alerts */}
+                {criticalErrors.map((err, i) => (
+                  <div key={`critical-${i}`} className={`border-2 rounded-xl p-4 ${darkMode ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>🚨 {err.field}</h3>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-700'}>{err.message}</p>
+                  </div>
+                ))}
+
+                {highErrors.map((err, i) => (
+                  <div key={`high-${i}`} className={`border-2 rounded-xl p-4 ${darkMode ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 border-amber-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-amber-200' : 'text-amber-900'}`}>⚠️ {err.field}</h3>
+                    <p className={darkMode ? 'text-amber-300' : 'text-amber-700'}>{err.message}</p>
+                  </div>
+                ))}
+
+                {hasLowConfidence && (
+                  <div className={`border-2 rounded-xl p-4 ${darkMode ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-300'}`}>
+                    <h3 className={`font-bold ${darkMode ? 'text-red-200' : 'text-red-900'}`}>🚨 Low Confidence Data Detected</h3>
+                    <p className={darkMode ? 'text-red-300' : 'text-red-700'}>Some fields have low confidence. Review carefully before use!</p>
+                  </div>
+                )}
+
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {/* Document Preview */}
+                  <div className={`rounded-xl shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>📄 Original Document</h2>
+                    {filePreview ? (
+                      <div className="border rounded-xl overflow-hidden relative">
+                        {file?.type === 'application/pdf' ? (
+                          <PDFViewer 
+                            fileData={filePreview} 
+                            highlightText={pdfHighlightText}
+                            isDark={darkMode}
+                          />
+                        ) : (
+                          <div className="relative">
+                            <img src={filePreview} alt="Document preview" className="w-full" />
+                            {highlightedField && extractedData[highlightedField]?.location && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                                <div className={`m-4 p-5 rounded-lg shadow-xl max-w-md ${darkMode ? 'bg-gray-800 border border-blue-500' : 'bg-white border-2 border-blue-500'}`}>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-2xl">📍</span>
+                                    <h3 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                      {FIELD_LABELS[highlightedField]}
+                                    </h3>
+                                  </div>
+                                  <p className={`text-sm mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    <span className="font-semibold">Location:</span> {extractedData[highlightedField].location}
+                                  </p>
+                                  <p className={`text-sm p-3 rounded border italic ${darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                                    "{extractedData[highlightedField].source}"
+                                  </p>
+                                  <button 
+                                    onClick={() => {
+                                      setHighlightedField(null);
+                                      setPdfHighlightText(null);
+                                    }}
+                                    className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* Info bar for PDF highlighting */}
+                        {file?.type === 'application/pdf' && highlightedField && extractedData[highlightedField]?.source && (
+                          <div className={`p-3 border-t ${darkMode ? 'bg-blue-900/80 border-blue-700' : 'bg-blue-50 border-blue-200'}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className={`text-sm font-medium ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+                                📍 <strong>{FIELD_LABELS[highlightedField]}:</strong> {extractedData[highlightedField].location}
+                              </p>
+                              <button 
+                                onClick={() => {
+                                  setHighlightedField(null);
+                                  setPdfHighlightText(null);
+                                }}
+                                className={`px-3 py-1 rounded text-sm font-medium ${darkMode ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-200 hover:bg-blue-300 text-blue-800'}`}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className={`p-12 text-center border-2 border-dashed rounded-xl ${darkMode ? 'border-gray-600 text-gray-400' : 'border-gray-300 text-gray-500'}`}>
+                        <p>Preview not available for loaded records</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Extracted Data */}
+                  <div className={`rounded-xl shadow-sm p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                    <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>📋 Extracted Data</h2>
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                      {Object.entries(extractedData).map(([key, value]) => (
+                        <DataFieldCard
+                          key={key}
+                          fieldKey={key}
+                          value={value}
+                          label={FIELD_LABELS[key] || key}
+                          isHighlighted={highlightedField === key}
+                          isVerified={verifications[key] || false}
+                          userNote={userNotes[key]}
+                          onToggleVerification={(k) => setVerifications(prev => ({ ...prev, [k]: !prev[k] }))}
+                          onUpdateNote={(k, note) => setUserNotes(prev => ({ ...prev, [k]: note }))}
+                          onCopy={copyToClipboard}
+                          onHighlight={(k) => {
+                            const newValue = highlightedField === k ? null : k;
+                            setHighlightedField(newValue);
+                            // Set the source text for PDF highlighting
+                            if (newValue && extractedData[k]?.source) {
+                              setPdfHighlightText(extractedData[k].source);
+                            } else {
+                              setPdfHighlightText(null);
+                            }
+                          }}
+                          isDark={darkMode}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Verification Status */}
+                    <div className={`mt-6 p-4 rounded-xl border-2 ${
+                      allVerified 
+                        ? (darkMode ? 'bg-green-900/30 border-green-700' : 'bg-green-50 border-green-300')
+                        : (darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300')
+                    }`}>
+                      {allVerified ? (
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">✅</span>
+                          <div>
+                            <p className={`font-bold ${darkMode ? 'text-green-200' : 'text-green-900'}`}>All Fields Verified</p>
+                            <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>Ready for processing</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">⚠️</span>
+                          <div>
+                            <p className={`font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>Verification Required</p>
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              {Object.values(verifications).filter(v => v).length} of {Object.keys(verifications).length} fields verified
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer className={`mt-auto py-4 text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <p>All data is encrypted locally and never sent to external servers except for AI processing.</p>
+          </footer>
+        </div>
+      );
+    }
+
+    // Mount application
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<SettlementExtractorPro />);
   </script>
